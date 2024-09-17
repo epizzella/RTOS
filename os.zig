@@ -21,6 +21,7 @@ const builtin = @import("builtin");
 const ArchInterface = @import("source/arch/arch_interface.zig");
 var arch = ArchInterface.getArch(builtin.cpu.model);
 
+pub const Mutex = @import("source/os_mutex.zig");
 pub const Task = OsTask.Task;
 pub const OsConfig = OsCore.OsConfig;
 pub fn coreInit() void {
