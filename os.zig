@@ -19,7 +19,8 @@ const OsCore = @import("source/os_core.zig");
 const TaskQueue = @import("source/util/task_queue.zig");
 const builtin = @import("builtin");
 const ArchInterface = @import("source/arch/arch_interface.zig");
-var arch = ArchInterface.getArch(builtin.cpu.model);
+
+var arch = ArchInterface.arch;
 
 pub const Mutex = @import("source/os_mutex.zig");
 pub const Task = OsTask.Task;
@@ -32,11 +33,15 @@ const DEFAULT_IDLE_TASK_SIZE = 17;
 
 const task_ctrl = &OsTask.task_control;
 
+pub fn setArch(cpu: *ArchInterface.Arch) void {
+    arch = cpu;
+}
+
 ///Returns a new task.
 pub fn create_task(config: OsTask.TaskConfig) TaskQueue.TaskHandle {
     return TaskQueue.TaskHandle{
         .name = config.name,
-        ._data = Task._create_task(config),
+        ._data = Task.create_task(config),
     };
 }
 
@@ -48,14 +53,14 @@ pub fn addTaskToOs(task: *TaskQueue.TaskHandle) void {
 export var g_stack_offset: u32 = 0x08;
 ///The operating system will begin multitasking.  This function never returns.
 pub fn startOS(comptime config: OsConfig) void {
-    if (OsCore._isOsStarted() == false) {
+    if (OsCore.isOsStarted() == false) {
         comptime {
             if (config.idle_stack_size < DEFAULT_IDLE_TASK_SIZE) {
                 @compileError("Idle stack size cannont be less than the default size.");
             }
         }
 
-        OsCore._setOsConfig(config);
+        OsCore.setOsConfig(config);
 
         var idle_stack: [config.idle_stack_size]u32 = [_]u32{0xDEADC0DE} ** config.idle_stack_size;
 
@@ -72,7 +77,7 @@ pub fn startOS(comptime config: OsConfig) void {
         //Find offset to stack ptr as zig does not guarantee struct field order
         g_stack_offset = @abs(@intFromPtr(&idle_task._data.stack_ptr) -% @intFromPtr(&idle_task));
 
-        OsCore._setOsStarted();
+        OsCore.setOsStarted();
         arch.runScheduler(); //begin os
 
         if (arch.isDebugAttached()) {

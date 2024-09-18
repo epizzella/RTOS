@@ -8,36 +8,36 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,          
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const OS_TASK = @import("../../../os_task.zig");
-const OS_CORE = @import("../../../os_core.zig");
+const OsTask = @import("../../../os_task.zig");
+const OsCore = @import("../../../os_core.zig");
 
-const task_ctrl_tbl = &OS_TASK.task_control;
-const os_config = &OS_CORE._getOsConfig;
-const os_started = &OS_CORE._isOsStarted;
+const task_ctrl = &OsTask.task_control;
+const os_config = &OsCore.getOsConfig;
+const os_started = &OsCore.isOsStarted;
+const Task = OsTask.Task;
 
-const Self = @This();
+pub const Self = @This();
 
 /////////////////////////////////////////////////////////
 //    Architecture specific Function Implemntations   //
 ///////////////////////////////////////////////////////
-fn schedule() void {
-    var self = Self{};
-    task_ctrl_tbl.readyNextTask();
-    if (task_ctrl_tbl.validSwitch()) {
-        self.runContextSwitch();
-    }
-}
-
 pub fn coreInit(self: *Self) void {
     _ = self;
     SHPR3.PRI_PENDSV = LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
     SHPR3.PRI_SYSTICK = ~LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
+}
+
+pub fn initStack(self: *Self, task: *Task) void {
+    _ = self;
+    task.stack_ptr = @intFromPtr(&task.stack.ptr[task.stack.len - 16]);
+    task.stack.ptr[task.stack.len - 1] = 0x1 << 24; // xPSR
+    task.stack.ptr[task.stack.len - 2] = @intFromPtr(task.subroutine); // PC
 }
 
 pub fn interruptActive(self: *Self) bool {
@@ -59,7 +59,7 @@ pub inline fn criticalStart(self: *Self) void {
 
 pub inline fn runScheduler(self: *Self) void {
     _ = self;
-    asm volatile ("SVC      #0");
+    asm volatile ("SVC    #0");
 }
 
 pub inline fn runContextSwitch(self: *Self) void {
@@ -82,16 +82,16 @@ export fn SysTick_Handler() void {
     }
 
     if (os_started()) {
-        task_ctrl_tbl.updateTasksDelay();
-        task_ctrl_tbl.cycleActive();
-        schedule();
+        task_ctrl.updateTasksDelay();
+        task_ctrl.cycleActive();
+        OsCore.schedule();
     }
 }
 
 export fn SVC_Handler() void {
     var self = Self{};
     self.criticalStart();
-    schedule();
+    OsCore.schedule();
     self.criticalEnd();
 }
 

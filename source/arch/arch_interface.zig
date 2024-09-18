@@ -8,7 +8,7 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,          
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -16,23 +16,25 @@
 
 const ARMv7M = @import("arm-cortex-m/common/arch.zig");
 const TestArch = @import("test/test_arch.zig");
+const Task = @import("../os_task.zig").Task;
 const builtin = @import("builtin");
 const std = @import("std");
 const cpu = std.Target.arm.cpu;
 
-pub fn getArch(comptime cpu_model: *const std.Target.Cpu.Model) Arch {
+pub const arch: Arch = getArch: {
+    const cpu_model = builtin.cpu.model;
     if (builtin.is_test == true) {
-        return Arch{ .test_arch = TestArch };
+        break :getArch Arch{ .test_arch = TestArch{} };
     } else if (cpu_model == &cpu.cortex_m0 or cpu_model == &cpu.cortex_m0plus) {
         @compileError("Unsupported architecture selected.");
     } else if (cpu_model == &cpu.cortex_m3 or cpu_model == &cpu.cortex_m4 or cpu_model == &cpu.cortex_m7) {
-        return Arch{ .armv7_m = ARMv7M{} };
+        break :getArch Arch{ .armv7_m = ARMv7M{} };
     } else if (cpu_model == &cpu.cortex_m23 or cpu_model == &cpu.cortex_m33 or cpu_model == &cpu.cortex_m55 and cpu_model == &cpu.cortex_m85) {
         @compileError("Unsupported architecture selected.");
     } else {
         @compileError("Unsupported architecture selected.");
     }
-}
+};
 
 const Arch = union(enum) {
     armv7_m: ARMv7M,
@@ -43,6 +45,12 @@ const Arch = union(enum) {
     pub fn coreInit(self: *Self) void {
         switch (self.*) {
             inline else => |*case| return case.coreInit(),
+        }
+    }
+
+    pub fn initStack(self: *Self, task: *Task) void {
+        switch (self.*) {
+            inline else => |*case| return case.initStack(task),
         }
     }
 

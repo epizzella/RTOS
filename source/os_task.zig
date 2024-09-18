@@ -8,7 +8,7 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,          
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -16,8 +16,12 @@
 
 const TaskQueue = @import("util/task_queue.zig");
 const OsCore = @import("os_core.zig");
+const ArchInterface = @import("arch/arch_interface.zig");
 
 const TaskHandle = TaskQueue.TaskHandle;
+
+var arch = ArchInterface.arch;
+const os_config = &OsCore.getOsConfig;
 
 pub const Task = struct {
     stack: []u32,
@@ -27,19 +31,15 @@ pub const Task = struct {
     priority: u5,
     name: []const u8,
 
-    pub fn _create_task(config: TaskConfig) Task {
+    pub fn create_task(config: TaskConfig) Task {
         const task = Task{
             .name = config.name,
             .stack = config.stack,
             .priority = config.priority,
             .subroutine = config.subroutine,
             .blocked_time = 0,
-            // .stack_ptr = @intFromPtr(&config.stack[config.stack.len - 16]),
             .stack_ptr = 0,
         };
-
-        //task.stack.ptr[task.stack.len - 1] = 0x1 << 24; // xPSR
-        //task.stack.ptr[task.stack.len - 2] = @intFromPtr(task.subroutine); //PC
 
         return task;
     }
@@ -69,7 +69,7 @@ const TaskControl = struct {
     export var next_task: *volatile TaskQueue.TaskHandle = undefined;
 
     pub fn initAllStacks(self: *TaskControl) void {
-        if (!OsCore._isOsStarted()) {
+        if (!OsCore.isOsStarted()) {
             for (&self.table) |*row| {
                 var active_task = row.active_tasks.head;
                 var suspend_task = row.suspended_tasks.head;
@@ -91,9 +91,7 @@ const TaskControl = struct {
     }
 
     fn initTaskStack(task: *TaskHandle) void {
-        task._data.stack_ptr = @intFromPtr(&task._data.stack.ptr[task._data.stack.len - 16]);
-        task._data.stack.ptr[task._data.stack.len - 1] = 0x1 << 24; // xPSR
-        task._data.stack.ptr[task._data.stack.len - 2] = @intFromPtr(task._data.subroutine); // PC
+        arch.initStack(&task._data);
     }
 
     ///Add task to the active task queue
@@ -161,16 +159,17 @@ const TaskControl = struct {
 
     ///Updates the delayed time for each sleeping task
     pub fn updateTasksDelay(self: *TaskControl) void {
+        const os_period = os_config().system_clock_period_ms;
         for (&self.table) |*taskState| {
             if (taskState.yielded_task.head) |head| {
                 var task = head;
                 while (true) { //iterate over the priority level list
-
-                    if (task._data.blocked_time == 0) {
-                        @breakpoint();
+                    if (task._data.blocked_time < os_period) {
+                        task._data.blocked_time = 0;
+                    } else {
+                        task._data.blocked_time -= os_period;
                     }
 
-                    task._data.blocked_time -= 1; //todo: add a varaible for the system clock period
                     if (task._data.blocked_time == 0) {
                         self.removeYielded(task);
                         self.addActive(task);
