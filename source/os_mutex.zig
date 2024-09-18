@@ -48,9 +48,9 @@ pub const Mutex = struct {
         return Mutex{ ._name = name, ._context = .{} };
     }
 
-    pub fn acquire(self: *Mutex) void {
-        if (!OsCore.isOsStarted()) @breakpoint(); //TODO: return an error
-        if (arch.interruptActive()) @breakpoint(); //TODO: return an error
+    pub fn acquire(self: *Mutex) MutexErrors!void {
+        if (!OsCore.isOsStarted()) return MutexErrors.Mutex_OsOffline;
+        if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
 
         arch.criticalStart();
         if (self._context.owner) |owner| {
@@ -63,24 +63,22 @@ pub const Mutex = struct {
                 arch.runScheduler();
                 arch.criticalStart();
             } else {
-                @breakpoint();
-                //TODO: return error
+                return MutexErrors.Mutex_ActiveTaskNull;
             }
         } else {
             //unlocked
             if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
                 self._context.owner = active_task;
             } else {
-                @breakpoint();
-                //TODO: return error
+                return MutexErrors.Mutex_ActiveTaskNull;
             }
         }
         arch.criticalEnd();
     }
 
-    pub fn release(self: *Mutex) void {
-        if (!OsCore.isOsStarted()) @breakpoint(); //TODO: return an error
-        if (arch.interruptActive()) @breakpoint(); //TODO: return an error
+    pub fn release(self: *Mutex) MutexErrors!void {
+        if (!OsCore.isOsStarted()) return MutexErrors.Mutex_OsOffline;
+        if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
 
         arch.criticalStart();
         if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
@@ -95,20 +93,24 @@ pub const Mutex = struct {
                     }
                 }
             } else {
-                @breakpoint();
-                //TODO: return an error
+                return MutexErrors.Mutex_TaskNotOwner;
             }
         } else {
-            @breakpoint();
-            //TODO: return an error
+            return MutexErrors.Mutex_ActiveTaskNull;
         }
         arch.criticalEnd();
     }
 };
 
 const MutexErrors = error{
+    ///The operating system has not started multi tasking.
     Mutex_OsOffline,
-    Mutex_Interrupt,
+    ///It is illegal to aquire or release a mutex in an interrupt
+    Mutex_InterruptAccess,
+    ///The active task is null.  This is an illegal state once multi tasking as started.
     Mutex_ActiveTaskNull,
+    ///It is illegal for a task that does not own the mutex to release the mutex.
     Mutex_TaskNotOwner,
+    ///Mutex Timed out.
+    Mutex_TimeOut,
 };
