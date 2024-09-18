@@ -38,7 +38,7 @@ pub fn setOsConfig(config: OsConfig) void {
     }
 }
 
-fn idle_subroutine() void {
+fn idle_subroutine() !void {
     while (true) {}
 }
 
@@ -51,7 +51,7 @@ fn idle_subroutine() void {
 /// `sysTick_callback` - function run at the beginning of the sysTick interrupt;
 pub const OsConfig = struct {
     system_clock_period_ms: u32 = DEFAULT_SYS_CLK_PERIOD,
-    idle_task_subroutine: *const fn () void = &idle_subroutine,
+    idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
     idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
     sysTick_callback: ?*const fn () void = null,
 };

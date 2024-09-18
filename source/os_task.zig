@@ -26,7 +26,8 @@ const os_config = &OsCore.getOsConfig;
 pub const Task = struct {
     stack: []u32,
     stack_ptr: u32,
-    subroutine: *const fn () void,
+    subroutine: *const fn () anyerror!void,
+    subroutineErrHandler: ?*const fn (err: anyerror) void = null,
     blocked_time: u32 = 0,
     priority: u5,
     name: []const u8,
@@ -37,6 +38,7 @@ pub const Task = struct {
             .stack = config.stack,
             .priority = config.priority,
             .subroutine = config.subroutine,
+            .subroutineErrHandler = config.subroutineErrHandler,
             .blocked_time = 0,
             .stack_ptr = 0,
         };
@@ -46,9 +48,15 @@ pub const Task = struct {
 };
 
 pub const TaskConfig = struct {
+    /// Task name
     name: []const u8,
+    /// Task stack
     stack: []u32,
-    subroutine: *const fn () void,
+    /// Function executed by task
+    subroutine: *const fn () anyerror!void,
+    /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
+    /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
+    subroutineErrHandler: ?*const fn (err: anyerror) void = null,
     priority: u5,
 };
 
@@ -75,12 +83,12 @@ const TaskControl = struct {
                 var suspend_task = row.suspended_tasks.head;
                 while (true) {
                     if (active_task) |a| {
-                        initTaskStack(a);
+                        arch.initStack(&a._data);
                         active_task = a._to_tail;
                     }
 
                     if (suspend_task) |s| {
-                        initTaskStack(s);
+                        arch.initStack(&s._data);
                         suspend_task = s._to_tail;
                     }
 
@@ -88,10 +96,6 @@ const TaskControl = struct {
                 }
             }
         }
-    }
-
-    fn initTaskStack(task: *TaskHandle) void {
-        arch.initStack(&task._data);
     }
 
     ///Add task to the active task queue
@@ -106,7 +110,7 @@ const TaskControl = struct {
     }
 
     ///Add task to the suspended task queue
-    pub fn addSuspended(self: TaskControl, task: *TaskQueue.TaskHandle) void {
+    pub fn addSuspended(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         self.table[task._data.priority].suspended_tasks.insertAfter(task, null);
     }
 
@@ -197,3 +201,25 @@ const TaskStateQ = struct {
     yielded_task: TaskQueue = .{},
     suspended_tasks: TaskQueue = .{},
 };
+
+pub fn taskTopRoutine() void {
+    if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+        active_task._data.subroutine() catch |err| {
+            if (active_task._data.subroutineErrHandler) |errHandler| {
+                errHandler(err);
+            }
+        };
+    }
+
+    arch.criticalStart();
+    if (task_control.popActive()) |active_task| {
+        task_control.addSuspended(active_task);
+    }
+    arch.criticalEnd();
+    arch.runScheduler();
+}
+
+fn defaultErrorHandler(err: anyerror) void {
+    if (arch.isDebugAttached()) @breakpoint();
+    _ = err;
+}

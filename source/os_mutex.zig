@@ -57,20 +57,19 @@ pub const Mutex = struct {
             //locked
             _ = owner; //TODO: add priority inheritance check
 
-            if (task_control.popActive()) |active| {
-                self._context.pending.insertSorted(active);
+            if (task_control.popActive()) |active_task| {
+                self._context.pending.insertSorted(active_task);
                 arch.criticalEnd();
                 arch.runScheduler();
                 arch.criticalStart();
-                if (active != task_control.table[task_control.runningPrio].active_tasks.head) @breakpoint();
             } else {
                 @breakpoint();
                 //TODO: return error
             }
         } else {
             //unlocked
-            if (task_control.table[task_control.runningPrio].active_tasks.head) |c_task| {
-                self._context.owner = c_task;
+            if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+                self._context.owner = active_task;
             } else {
                 @breakpoint();
                 //TODO: return error
@@ -84,8 +83,8 @@ pub const Mutex = struct {
         if (arch.interruptActive()) @breakpoint(); //TODO: return an error
 
         arch.criticalStart();
-        if (task_control.table[task_control.runningPrio].active_tasks.head) |c_task| {
-            if (c_task == self._context.owner) {
+        if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+            if (active_task == self._context.owner) {
                 self._context.owner = self._context.pending.head;
                 if (self._context.pending.pop()) |head| {
                     task_control.addActive(head);
@@ -105,4 +104,11 @@ pub const Mutex = struct {
         }
         arch.criticalEnd();
     }
+};
+
+const MutexErrors = error{
+    Mutex_OsOffline,
+    Mutex_Interrupt,
+    Mutex_ActiveTaskNull,
+    Mutex_TaskNotOwner,
 };
