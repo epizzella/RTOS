@@ -59,6 +59,7 @@ pub const Mutex = struct {
 
             if (task_control.popActive()) |active_task| {
                 self._context.pending.insertSorted(active_task);
+                active_task._data.state = OsTask.State.blocked;
                 arch.criticalEnd();
                 arch.runScheduler();
                 arch.criticalStart();
@@ -67,7 +68,7 @@ pub const Mutex = struct {
             }
         } else {
             //unlocked
-            if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+            if (task_control.table[task_control.active_priority].active_tasks.head) |active_task| {
                 self._context.owner = active_task;
             } else {
                 return MutexErrors.Mutex_ActiveTaskNull;
@@ -81,12 +82,13 @@ pub const Mutex = struct {
         if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
 
         arch.criticalStart();
-        if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+        if (task_control.table[task_control.active_priority].active_tasks.head) |active_task| {
             if (active_task == self._context.owner) {
                 self._context.owner = self._context.pending.head;
                 if (self._context.pending.pop()) |head| {
                     task_control.addActive(head);
-                    if (head._data.priority < task_control.runningPrio) {
+                    head._data.state = OsTask.State.ready;
+                    if (head._data.priority < task_control.active_priority) {
                         arch.criticalEnd();
                         arch.runScheduler();
                         arch.criticalStart();
@@ -102,7 +104,7 @@ pub const Mutex = struct {
     }
 };
 
-const MutexErrors = error{
+pub const MutexErrors = error{
     ///The operating system has not started multi tasking.
     Mutex_OsOffline,
     ///It is illegal to aquire or release a mutex in an interrupt

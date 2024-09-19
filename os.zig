@@ -90,11 +90,12 @@ pub fn startOS(comptime config: OsConfig) void {
 
 ///Put the active task to sleep.  It will become ready to run again `time_ms` milliseconds later
 pub fn delay(time_ms: u32) void {
-    if (task_ctrl.table[task_ctrl.runningPrio].active_tasks.head) |c_task| {
+    if (task_ctrl.table[task_ctrl.active_priority].active_tasks.head) |active_task| {
         //TODO: check if c_task is idle task and throw an error if so
-        c_task._data.blocked_time = time_ms;
-        task_ctrl.removeActive(@volatileCast(c_task));
-        task_ctrl.addYeilded(@volatileCast(c_task));
+        active_task._data.blocked_time = time_ms;
+        task_ctrl.removeActive(@volatileCast(active_task));
+        task_ctrl.addYeilded(@volatileCast(active_task));
+        active_task._data.state = OsTask.State.yeilded;
         arch.runScheduler();
     }
 }

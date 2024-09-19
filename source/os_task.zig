@@ -26,10 +26,12 @@ const os_config = &OsCore.getOsConfig;
 pub const Task = struct {
     stack: []u32,
     stack_ptr: u32,
+    state: State = State.ready,
     subroutine: *const fn () anyerror!void,
     subroutineErrHandler: ?*const fn (err: anyerror) void = null,
     blocked_time: u32 = 0,
     priority: u5,
+    basePriority: u5,
     name: []const u8,
 
     pub fn create_task(config: TaskConfig) Task {
@@ -37,6 +39,7 @@ pub const Task = struct {
             .name = config.name,
             .stack = config.stack,
             .priority = config.priority,
+            .basePriority = config.priority,
             .subroutine = config.subroutine,
             .subroutineErrHandler = config.subroutineErrHandler,
             .blocked_time = 0,
@@ -46,6 +49,8 @@ pub const Task = struct {
         return task;
     }
 };
+
+pub const State = enum { running, ready, suspended, yeilded, blocked, exited };
 
 pub const TaskConfig = struct {
     /// Task name
@@ -57,6 +62,7 @@ pub const TaskConfig = struct {
     /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
     /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
     subroutineErrHandler: ?*const fn (err: anyerror) void = null,
+    ///Priority level of the task.  Lower number = higher priority.
     priority: u5,
 };
 
@@ -70,8 +76,8 @@ const ONE: u32 = 0x1;
 
 const TaskControl = struct {
     table: [MAX_PRIO_LEVEL]TaskStateQ = [_]TaskStateQ{.{}} ** MAX_PRIO_LEVEL,
-    readyMask: u32 = 0, //      mask of ready tasks
-    runningPrio: u6 = 0x00, //  priority level of the currently running task
+    ready_mask: u32 = 0, //      mask of ready tasks
+    active_priority: u6 = 0x00, //  priority level of the currently running task
 
     export var current_task: ?*volatile TaskQueue.TaskHandle = null;
     export var next_task: *volatile TaskQueue.TaskHandle = undefined;
@@ -80,19 +86,13 @@ const TaskControl = struct {
         if (!OsCore.isOsStarted()) {
             for (&self.table) |*row| {
                 var active_task = row.active_tasks.head;
-                var suspend_task = row.suspended_tasks.head;
                 while (true) {
                     if (active_task) |a| {
                         arch.initStack(&a._data);
                         active_task = a._to_tail;
                     }
 
-                    if (suspend_task) |s| {
-                        arch.initStack(&s._data);
-                        suspend_task = s._to_tail;
-                    }
-
-                    if (active_task == null and suspend_task == null) break;
+                    if (active_task == null) break;
                 }
             }
         }
@@ -101,24 +101,27 @@ const TaskControl = struct {
     ///Add task to the active task queue
     pub fn addActive(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         self.table[task._data.priority].active_tasks.insertAfter(task, null);
-        self.readyMask |= ONE << (priorityAdjust[task._data.priority]);
+        self.ready_mask |= ONE << (priorityAdjust[task._data.priority]);
+        task._data.state = State.ready;
     }
 
     ///Add task to the yielded task queue
     pub fn addYeilded(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         self.table[task._data.priority].yielded_task.insertAfter(task, null);
+        task._data.state = State.yeilded;
     }
 
     ///Add task to the suspended task queue
     pub fn addSuspended(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         self.table[task._data.priority].suspended_tasks.insertAfter(task, null);
+        if (task._data.state != State.exited) task._data.state = State.suspended;
     }
 
     ///Remove task from the active task queue
     pub fn removeActive(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         _ = self.table[task._data.priority].active_tasks.remove(task);
         if (self.table[task._data.priority].active_tasks.head == null) {
-            self.readyMask &= ~(ONE << (priorityAdjust[task._data.priority]));
+            self.ready_mask &= ~(ONE << (priorityAdjust[task._data.priority]));
         }
     }
 
@@ -134,9 +137,9 @@ const TaskControl = struct {
 
     ///Pop the active task from its active queue
     pub fn popActive(self: *TaskControl) ?*TaskQueue.TaskHandle {
-        const head = self.table[self.runningPrio].active_tasks.pop();
-        if (self.table[self.runningPrio].active_tasks.head == null) {
-            self.readyMask &= ~(ONE << (priorityAdjust[self.runningPrio]));
+        const head = self.table[self.active_priority].active_tasks.pop();
+        if (self.table[self.active_priority].active_tasks.head == null) {
+            self.ready_mask &= ~(ONE << (priorityAdjust[self.active_priority]));
         }
 
         return head;
@@ -144,15 +147,16 @@ const TaskControl = struct {
 
     ///Move the head task to the tail position of the active queue
     pub fn cycleActive(self: *TaskControl) void {
-        if (self.runningPrio < MAX_PRIO_LEVEL) {
-            self.table[self.runningPrio].active_tasks.headToTail();
+        if (self.active_priority < MAX_PRIO_LEVEL) {
+            self.table[self.active_priority].active_tasks.headToTail();
         }
     }
 
     ///Set `next_task` to the highest priority task that is ready to run
     pub fn readyNextTask(self: *TaskControl) void {
-        self.runningPrio = @clz(self.readyMask);
-        next_task = self.table[self.runningPrio].active_tasks.head.?;
+        self.active_priority = @clz(self.ready_mask);
+        next_task = self.table[self.active_priority].active_tasks.head.?;
+        next_task._data.state = State.running;
     }
 
     ///Returns true if `current_task` and `next_task` are different
@@ -203,7 +207,7 @@ const TaskStateQ = struct {
 };
 
 pub fn taskTopRoutine() void {
-    if (task_control.table[task_control.runningPrio].active_tasks.head) |active_task| {
+    if (task_control.table[task_control.active_priority].active_tasks.head) |active_task| {
         active_task._data.subroutine() catch |err| {
             if (active_task._data.subroutineErrHandler) |errHandler| {
                 errHandler(err);
@@ -214,12 +218,8 @@ pub fn taskTopRoutine() void {
     arch.criticalStart();
     if (task_control.popActive()) |active_task| {
         task_control.addSuspended(active_task);
+        active_task._data.state = State.exited;
     }
     arch.criticalEnd();
     arch.runScheduler();
-}
-
-fn defaultErrorHandler(err: anyerror) void {
-    if (arch.isDebugAttached()) @breakpoint();
-    _ = err;
 }

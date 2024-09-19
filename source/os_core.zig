@@ -61,6 +61,7 @@ pub fn setOsStarted() void {
     os_started = true;
 }
 
+///Returns true is the OS was started
 pub fn isOsStarted() bool {
     return os_started;
 }
@@ -72,12 +73,13 @@ pub fn schedule() void {
     }
 }
 
-pub fn systemTick() void {
-    if (os_config().sysTick_callback) |callback| {
+///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
+pub inline fn systemTick() void {
+    if (os_config.sysTick_callback) |callback| {
         callback();
     }
 
-    if (os_started()) {
+    if (os_started) {
         task_ctrl.updateTasksDelay();
         task_ctrl.cycleActive();
         schedule();
