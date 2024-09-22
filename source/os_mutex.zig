@@ -68,7 +68,7 @@ pub const Mutex = struct {
             }
         } else {
             //unlocked
-            if (task_control.table[task_control.active_priority].active_tasks.head) |active_task| {
+            if (task_control.table[task_control.running_priority].ready_tasks.head) |active_task| {
                 self._context.owner = active_task;
             } else {
                 return MutexErrors.Mutex_ActiveTaskNull;
@@ -82,13 +82,13 @@ pub const Mutex = struct {
         if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
 
         arch.criticalStart();
-        if (task_control.table[task_control.active_priority].active_tasks.head) |active_task| {
+        if (task_control.table[task_control.running_priority].ready_tasks.head) |active_task| {
             if (active_task == self._context.owner) {
                 self._context.owner = self._context.pending.head;
                 if (self._context.pending.pop()) |head| {
                     task_control.addActive(head);
                     head._data.state = OsTask.State.ready;
-                    if (head._data.priority < task_control.active_priority) {
+                    if (head._data.priority < task_control.running_priority) {
                         arch.criticalEnd();
                         arch.runScheduler();
                         arch.criticalStart();
