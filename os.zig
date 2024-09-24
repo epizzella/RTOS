@@ -24,6 +24,7 @@ var arch = ArchInterface.arch;
 
 pub const Mutex = @import("source/os_mutex.zig").Mutex;
 pub const Task = OsTask.Task;
+pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 
 pub fn init() void {
@@ -42,7 +43,7 @@ pub fn create_task(config: OsTask.TaskConfig) TaskQueue.TaskHandle {
 
 ///Adds a task to the operating system.
 pub fn addTaskToOs(task: *TaskQueue.TaskHandle) void {
-    task_ctrl.addActive(task);
+    task_ctrl.addReady(task);
 }
 
 export var g_stack_offset: u32 = 0x08;
@@ -88,7 +89,7 @@ pub fn delay(time_ms: u32) OsCore.Error!void {
     var running_task = try OsCore.validateOsCall();
     const timeout: u32 = (time_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
     arch.criticalStart();
-    task_ctrl.removeActive(@volatileCast(running_task));
+    task_ctrl.removeReady(@volatileCast(running_task));
     task_ctrl.addYeilded(@volatileCast(running_task));
     running_task._data.timeout = timeout;
     running_task._data.state = OsTask.State.yeilded;

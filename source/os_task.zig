@@ -27,6 +27,7 @@ pub const Task = struct {
     stack: []u32,
     stack_ptr: usize,
     state: State = State.ready,
+    queue: ?*TaskQueue = null,
     subroutine: *const fn () anyerror!void,
     subroutineErrHandler: ?*const fn (err: anyerror) void = null,
     timeout: u32 = 0,
@@ -35,7 +36,7 @@ pub const Task = struct {
     name: []const u8,
 
     pub fn create_task(config: TaskConfig) Task {
-        const task = Task{
+        return Task{
             .name = config.name,
             .stack = config.stack,
             .priority = config.priority,
@@ -43,10 +44,8 @@ pub const Task = struct {
             .subroutine = config.subroutine,
             .subroutineErrHandler = config.subroutineErrHandler,
             .timeout = 0,
-            .stack_ptr = 0,
+            .stack_ptr = 0, //updated when os is started
         };
-
-        return task;
     }
 };
 
@@ -99,17 +98,48 @@ const TaskControl = struct {
         }
     }
 
+    inline fn clearReadyBit(self: *TaskControl, priority: u6) void {
+        self.ready_mask &= ~(ONE << (priorityAdjust[priority]));
+    }
+
+    inline fn setReadyBit(self: *TaskControl, priority: u6) void {
+        self.ready_mask |= ONE << (priorityAdjust[priority]);
+    }
+
+    pub fn readyTask(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
+        if (task._data.queue) |q| {
+            q.remove(task);
+        }
+        self.addReady(task);
+    }
+
+    pub fn yeildTask(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
+        if (task._data.queue) |q| {
+            q.remove(task);
+        }
+        if (task._data.state == State.ready) self.clearReadyBit(task._data.priority);
+        self.addYeilded(task);
+    }
+
+    pub fn suspendTask(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
+        if (task._data.queue) |q| {
+            q.remove(task);
+        }
+        if (task._data.state == State.ready) self.clearReadyBit(task._data.priority);
+        self.addSuspended(task);
+    }
+
     ///Add task to the active task queue
-    pub fn addActive(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
+    pub fn addReady(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         self.table[task._data.priority].ready_tasks.insertAfter(task, null);
-        self.ready_mask |= ONE << (priorityAdjust[task._data.priority]);
+        self.setReadyBit(task._data.priority);
         task._data.state = State.ready;
         task._data.timeout = 0;
     }
 
     ///Add task to the yielded task queue
     pub fn addYeilded(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
-        self.table[task._data.priority].yielded_task.insertAfter(task, null);
+        self.table[task._data.priority].yielded_tasks.insertAfter(task, null);
         task._data.state = State.yeilded;
     }
 
@@ -120,16 +150,16 @@ const TaskControl = struct {
     }
 
     ///Remove task from the active task queue
-    pub fn removeActive(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
+    pub fn removeReady(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
         _ = self.table[task._data.priority].ready_tasks.remove(task);
         if (self.table[task._data.priority].ready_tasks.head == null) {
-            self.ready_mask &= ~(ONE << (priorityAdjust[task._data.priority]));
+            self.clearReadyBit(task._data.priority);
         }
     }
 
     ///Remove task from the yielded task queue
     pub fn removeYielded(self: *TaskControl, task: *TaskQueue.TaskHandle) void {
-        _ = self.table[task._data.priority].yielded_task.remove(task);
+        _ = self.table[task._data.priority].yielded_tasks.remove(task);
     }
 
     ///Remove task from the suspended task queue
@@ -141,7 +171,7 @@ const TaskControl = struct {
     pub fn popActive(self: *TaskControl) ?*TaskQueue.TaskHandle {
         const head = self.table[self.running_priority].ready_tasks.pop();
         if (self.table[self.running_priority].ready_tasks.head == null) {
-            self.ready_mask &= ~(ONE << (priorityAdjust[self.running_priority]));
+            self.clearReadyBit(self.running_priority);
         }
 
         return head;
@@ -170,13 +200,13 @@ const TaskControl = struct {
     ///Updates the delayed time for each sleeping task
     pub fn updateTasksDelay(self: *TaskControl) void {
         for (&self.table) |*taskState| {
-            if (taskState.yielded_task.head) |head| {
+            if (taskState.yielded_tasks.head) |head| {
                 var task = head;
                 while (true) { //iterate over the priority level list
                     task._data.timeout -= 1;
                     if (task._data.timeout == 0) {
                         self.removeYielded(task);
-                        self.addActive(task);
+                        self.addReady(task);
                     }
 
                     if (task._to_tail) |next| {
@@ -198,7 +228,7 @@ const TaskControl = struct {
 
 const TaskStateQ = struct {
     ready_tasks: TaskQueue = .{},
-    yielded_task: TaskQueue = .{},
+    yielded_tasks: TaskQueue = .{},
     suspended_tasks: TaskQueue = .{},
     exited_tasks: TaskQueue = .{},
 };

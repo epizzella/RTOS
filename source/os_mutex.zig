@@ -82,7 +82,7 @@ pub const Mutex = struct {
 
     const Self = @This();
 
-    pub fn create_mutex(name: []const u8) Mutex {
+    pub fn create_mutex(comptime name: []const u8) Mutex {
         return Mutex{
             ._name = name,
         };
@@ -127,7 +127,7 @@ pub const Mutex = struct {
         if (active_task == self._owner) {
             self._owner = self._pending.head;
             if (self._pending.pop()) |head| {
-                task_control.addActive(head);
+                task_control.addReady(head);
                 if (head._data.priority < task_control.running_priority) {
                     arch.criticalEnd();
                     arch.runScheduler();

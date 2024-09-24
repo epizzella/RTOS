@@ -8,7 +8,7 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,          
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -49,6 +49,7 @@ pub fn insertBefore(self: *Self, insert_node: *TaskHandle, target_node: ?*TaskHa
         self.head = insert_node;
     }
 
+    insert_node._data.queue = self;
     self.elements += 1;
 }
 
@@ -73,6 +74,7 @@ pub fn insertAfter(self: *Self, insert_node: *TaskHandle, target_node: ?*TaskHan
         self.tail = insert_node;
     }
 
+    insert_node._data.queue = self;
     self.elements += 1;
 }
 
@@ -105,28 +107,13 @@ pub fn pop(self: *Self) ?*TaskHandle {
     } else {
         self.tail = null;
     }
+    rtn._data.queue = null;
     return rtn;
 }
 
 ///Returns true if the specified node is contained in the queue
 pub fn contains(self: *Self, node: *TaskHandle) bool {
-    var rtn = false;
-    if (self.head) |head| {
-        var current_node: *TaskHandle = head;
-        while (true) {
-            if (current_node == node) {
-                rtn = true;
-                break;
-            }
-            if (current_node._to_tail) |next| {
-                current_node = next;
-            } else {
-                break;
-            }
-        }
-    }
-
-    return rtn;
+    return node._data.queue == self;
 }
 
 ///Removes the specified task from the queue.  Returns false if the node is not contained in the queue.
@@ -160,6 +147,7 @@ pub fn remove(self: *Self, node: *TaskHandle) bool {
         node._to_tail = null;
 
         self.elements -= 1;
+        node._data.queue = null;
         rtn = true;
     }
 
