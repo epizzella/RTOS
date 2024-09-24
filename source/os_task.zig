@@ -29,7 +29,7 @@ pub const Task = struct {
     state: State = State.ready,
     subroutine: *const fn () anyerror!void,
     subroutineErrHandler: ?*const fn (err: anyerror) void = null,
-    blocked_time: u32 = 0,
+    timeout: u32 = 0,
     priority: u5,
     basePriority: u5,
     name: []const u8,
@@ -42,7 +42,7 @@ pub const Task = struct {
             .basePriority = config.priority,
             .subroutine = config.subroutine,
             .subroutineErrHandler = config.subroutineErrHandler,
-            .blocked_time = 0,
+            .timeout = 0,
             .stack_ptr = 0,
         };
 
@@ -50,7 +50,7 @@ pub const Task = struct {
     }
 };
 
-pub const State = enum { running, ready, suspended, yeilded, blocked, exited };
+pub const State = enum { running, ready, suspended, yeilded, blocked, blocked_timedout, exited };
 
 pub const TaskConfig = struct {
     /// Task name
@@ -71,14 +71,14 @@ pub var task_control: TaskControl = .{};
 // 32 user accessable priority levels + idle task at lowest priority level
 const MAX_PRIO_LEVEL = 33;
 //idle task is the lowest priority.
-const IDLE_PRIORITY_LEVEL: u32 = 32;
+pub const IDLE_PRIORITY_LEVEL: u32 = 32;
 const PRIO_ADJUST: u5 = 31;
 
 const ONE: u32 = 0x1;
 
 const TaskControl = struct {
     table: [MAX_PRIO_LEVEL]TaskStateQ = [_]TaskStateQ{.{}} ** MAX_PRIO_LEVEL,
-    ready_mask: u32 = 0, //      mask of ready tasks
+    ready_mask: u32 = 0, //          mask of ready tasks
     running_priority: u6 = 0x00, //  priority level of the currently running task
 
     export var current_task: ?*volatile TaskQueue.TaskHandle = null;
@@ -104,6 +104,7 @@ const TaskControl = struct {
         self.table[task._data.priority].ready_tasks.insertAfter(task, null);
         self.ready_mask |= ONE << (priorityAdjust[task._data.priority]);
         task._data.state = State.ready;
+        task._data.timeout = 0;
     }
 
     ///Add task to the yielded task queue
@@ -168,18 +169,12 @@ const TaskControl = struct {
 
     ///Updates the delayed time for each sleeping task
     pub fn updateTasksDelay(self: *TaskControl) void {
-        const os_period = os_config().system_clock_period_ms;
         for (&self.table) |*taskState| {
             if (taskState.yielded_task.head) |head| {
                 var task = head;
                 while (true) { //iterate over the priority level list
-                    if (task._data.blocked_time < os_period) {
-                        task._data.blocked_time = 0;
-                    } else {
-                        task._data.blocked_time -= os_period;
-                    }
-
-                    if (task._data.blocked_time == 0) {
+                    task._data.timeout -= 1;
+                    if (task._data.timeout == 0) {
                         self.removeYielded(task);
                         self.addActive(task);
                     }

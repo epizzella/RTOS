@@ -24,95 +24,117 @@ var arch = ArchInterface.arch;
 
 const Task = TaskQueue.TaskHandle;
 const task_control = &OsTask.task_control;
-
-pub var mutex_control_table: MutexControleTable = .{};
-
-const MutexControleTable = struct {};
-
-const Context = struct {
-    owner: ?*Task = null,
-    pending: TaskQueue = .{},
-};
+const os_config = &OsCore.getOsConfig;
+const Error = OsCore.Error;
 
 const Config = struct { name: []const u8, enable_priority_inheritance: bool = false };
 
-pub fn setArch(cpu: *ArchInterface.Arch) void {
-    arch = cpu;
-}
+pub const Control = struct {
+    var list: ?*Mutex = null;
+
+    pub fn add(new: *Mutex) void {
+        new._next = list;
+        list = new;
+        new._init = true;
+    }
+
+    pub fn updateTimeOut() void {
+        var mutex = list orelse return;
+        while (true) {
+            //var task = mutex._pending.head orelse break;
+            if (mutex._pending.head) |head| {
+                var task = head;
+                while (true) {
+                    if (task._data.timeout > 0) {
+                        task._data.timeout -= 1;
+                        if (task._data.timeout == 0) task._data.state = OsTask.State.blocked_timedout;
+                    }
+
+                    if (task._to_tail) |next| {
+                        task = next;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if (mutex._next) |next| {
+                mutex = next;
+            } else {
+                break;
+            }
+        }
+    }
+};
+
+var control: Control = .{};
+
+const AquireOptions = struct {
+    timeout_ms: u32 = 0,
+};
 
 pub const Mutex = struct {
     _name: []const u8,
-    _context: Context,
+    _owner: ?*Task = null,
+    _pending: TaskQueue = .{},
+    _next: ?*Mutex = null,
+    _init: bool = false,
+
+    const Self = @This();
 
     pub fn create_mutex(name: []const u8) Mutex {
-        return Mutex{ ._name = name, ._context = .{} };
+        return Mutex{
+            ._name = name,
+        };
     }
 
-    pub fn acquire(self: *Mutex) MutexErrors!void {
-        if (!OsCore.isOsStarted()) return MutexErrors.Mutex_OsOffline;
-        if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
-
+    //TODO: add timeout
+    pub fn acquire(self: *Self, options: AquireOptions) Error!void {
         arch.criticalStart();
-        if (self._context.owner) |owner| {
+        defer arch.criticalEnd();
+        const running_task = try OsCore.validateOsCall();
+
+        if (self._init == false) {
+            Control.add(self);
+        }
+
+        if (self._owner) |owner| {
             //locked
             _ = owner; //TODO: add priority inheritance check
 
             if (task_control.popActive()) |active_task| {
-                self._context.pending.insertSorted(active_task);
+                self._pending.insertSorted(active_task);
+                active_task._data.timeout = options.timeout_ms;
                 active_task._data.state = OsTask.State.blocked;
                 arch.criticalEnd();
                 arch.runScheduler();
                 arch.criticalStart();
+                if (active_task._data.state == OsTask.State.blocked_timedout) return Error.TimeOut;
             } else {
-                return MutexErrors.Mutex_ActiveTaskNull;
+                return Error.RunningTaskNull;
             }
         } else {
             //unlocked
-            if (task_control.table[task_control.running_priority].ready_tasks.head) |active_task| {
-                self._context.owner = active_task;
-            } else {
-                return MutexErrors.Mutex_ActiveTaskNull;
-            }
+            self._owner = running_task;
         }
-        arch.criticalEnd();
     }
 
-    pub fn release(self: *Mutex) MutexErrors!void {
-        if (!OsCore.isOsStarted()) return MutexErrors.Mutex_OsOffline;
-        if (arch.interruptActive()) return MutexErrors.Mutex_InterruptAccess;
-
+    pub fn release(self: *Mutex) Error!void {
         arch.criticalStart();
-        if (task_control.table[task_control.running_priority].ready_tasks.head) |active_task| {
-            if (active_task == self._context.owner) {
-                self._context.owner = self._context.pending.head;
-                if (self._context.pending.pop()) |head| {
-                    task_control.addActive(head);
-                    head._data.state = OsTask.State.ready;
-                    if (head._data.priority < task_control.running_priority) {
-                        arch.criticalEnd();
-                        arch.runScheduler();
-                        arch.criticalStart();
-                    }
+        defer arch.criticalEnd();
+        const active_task = try OsCore.validateOsCall();
+
+        if (active_task == self._owner) {
+            self._owner = self._pending.head;
+            if (self._pending.pop()) |head| {
+                task_control.addActive(head);
+                if (head._data.priority < task_control.running_priority) {
+                    arch.criticalEnd();
+                    arch.runScheduler();
                 }
-            } else {
-                return MutexErrors.Mutex_TaskNotOwner;
             }
         } else {
-            return MutexErrors.Mutex_ActiveTaskNull;
+            return Error.TaskNotOwner;
         }
-        arch.criticalEnd();
     }
-};
-
-pub const MutexErrors = error{
-    ///The operating system has not started multi tasking.
-    Mutex_OsOffline,
-    ///It is illegal to aquire or release a mutex in an interrupt
-    Mutex_InterruptAccess,
-    ///The active task is null.  This is an illegal state once multi tasking as started.
-    Mutex_ActiveTaskNull,
-    ///It is illegal for a task that does not own the mutex to release the mutex.
-    Mutex_TaskNotOwner,
-    ///Mutex Timed out.
-    Mutex_TimeOut,
 };

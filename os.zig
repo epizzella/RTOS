@@ -22,20 +22,15 @@ const ArchInterface = @import("source/arch/arch_interface.zig");
 
 var arch = ArchInterface.arch;
 
-pub const Mutex = @import("source/os_mutex.zig");
+pub const Mutex = @import("source/os_mutex.zig").Mutex;
 pub const Task = OsTask.Task;
 pub const OsConfig = OsCore.OsConfig;
-pub fn coreInit() void {
+
+pub fn init() void {
     arch.coreInit();
 }
 
-const DEFAULT_IDLE_TASK_SIZE = 17;
-
 const task_ctrl = &OsTask.task_control;
-
-pub fn setArch(cpu: *ArchInterface.Arch) void {
-    arch = cpu;
-}
 
 ///Returns a new task.
 pub fn create_task(config: OsTask.TaskConfig) TaskQueue.TaskHandle {
@@ -55,7 +50,7 @@ export var g_stack_offset: u32 = 0x08;
 pub fn startOS(comptime config: OsConfig) void {
     if (OsCore.isOsStarted() == false) {
         comptime {
-            if (config.idle_stack_size < DEFAULT_IDLE_TASK_SIZE) {
+            if (config.idle_stack_size < OsCore.DEFAULT_IDLE_TASK_SIZE) {
                 @compileError("Idle stack size cannont be less than the default size.");
             }
         }
@@ -88,14 +83,15 @@ pub fn startOS(comptime config: OsConfig) void {
     }
 }
 
-///Put the active task to sleep.  It will become ready to run again `time_ms` milliseconds later
-pub fn delay(time_ms: u32) void {
-    if (task_ctrl.table[task_ctrl.running_priority].ready_tasks.head) |active_task| {
-        //TODO: check if c_task is idle task and throw an error if so
-        active_task._data.blocked_time = time_ms;
-        task_ctrl.removeActive(@volatileCast(active_task));
-        task_ctrl.addYeilded(@volatileCast(active_task));
-        active_task._data.state = OsTask.State.yeilded;
-        arch.runScheduler();
-    }
+///Put the active task to sleep.  It will become ready to run again `time_ms` milliseconds.
+pub fn delay(time_ms: u32) OsCore.Error!void {
+    var running_task = try OsCore.validateOsCall();
+    const timeout: u32 = (time_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
+    arch.criticalStart();
+    task_ctrl.removeActive(@volatileCast(running_task));
+    task_ctrl.addYeilded(@volatileCast(running_task));
+    running_task._data.timeout = timeout;
+    running_task._data.state = OsTask.State.yeilded;
+    arch.criticalEnd();
+    arch.runScheduler();
 }

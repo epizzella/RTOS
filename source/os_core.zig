@@ -15,16 +15,19 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const OsTask = @import("os_task.zig");
-const mutex = @import("os_mutex.zig");
+const TaskQueue = @import("util/task_queue.zig");
+const Mutex = @import("os_mutex.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
-const builtin = @import("builtin");
 pub const Task = OsTask.Task;
 
-const task_ctrl = &OsTask.task_control;
 var arch = ArchInterface.arch;
+const task_ctrl = &OsTask.task_control;
+const TaskHandle = TaskQueue.TaskHandle;
 
-const DEFAULT_IDLE_TASK_SIZE = 17;
-const DEFAULT_SYS_CLK_PERIOD = 1;
+///TODO: Change this based on the selected arch
+pub const DEFAULT_IDLE_TASK_SIZE = 17;
+///1 Khz
+const DEFAULT_SYS_CLK_FREQ = 1000;
 
 var os_config: OsConfig = .{};
 
@@ -42,15 +45,15 @@ fn idle_subroutine() !void {
     while (true) {}
 }
 
-/// `system_clock_period_ms` - The peroid of the system clock in milliseconds.  Note:  This does not set
-/// the system clock.  This only informs the OS of the system clock's peroid.  Default = 1ms.
+/// `system_clock_period_ms` - The frequency of the system clock in hz.  Note:  This does not set
+/// the system clock.  This only informs the OS of the system clock's frequenncy.  Default = 1000hz.
 /// `idle_task_subroutine` - function run by the idle task. Replaces the default idle task.  This
 /// subroutine cannot be suspended or blocked;
 /// `idle_stack_size` - number of words in the idle task stack.   Note:  if idle_task_subroutine is
 /// provided idle_stack_size must be larger than 17;
 /// `sysTick_callback` - function run at the beginning of the sysTick interrupt;
 pub const OsConfig = struct {
-    system_clock_period_ms: u32 = DEFAULT_SYS_CLK_PERIOD,
+    system_clock_freq_hz: u32 = DEFAULT_SYS_CLK_FREQ,
     idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
     idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
     sysTick_callback: ?*const fn () void = null,
@@ -80,8 +83,32 @@ pub inline fn systemTick() void {
     }
 
     if (os_started) {
+        Mutex.Control.updateTimeOut();
         task_ctrl.updateTasksDelay();
         task_ctrl.cycleActive();
         schedule();
     }
 }
+
+pub fn validateOsCall() Error!*TaskHandle {
+    if (!os_started) return Error.OsOffline;
+    const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
+    if (running_task._data.priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
+    if (arch.interruptActive()) return Error.IllegalInterruptAccess;
+    return running_task;
+}
+
+pub const Error = error{
+    ///The running task is null.  This is an illegal state once multi tasking as started.
+    RunningTaskNull,
+    ///The operating system has not started multi tasking.
+    OsOffline,
+    ///Illegal call from idle task
+    IllegalIdleTask,
+    ///It is illegal to call this function from an interrupt
+    IllegalInterruptAccess,
+    ///A task that does not own this os object attempted access
+    TaskNotOwner,
+    ///Time out.
+    TimeOut,
+};
