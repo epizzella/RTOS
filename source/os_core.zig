@@ -15,14 +15,12 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const OsTask = @import("os_task.zig");
-const TaskQueue = @import("util/task_queue.zig");
-const Mutex = @import("os_mutex.zig");
+const Mutex = @import("synchronization/os_mutex.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 pub const Task = OsTask.Task;
 
 var arch = ArchInterface.arch;
 const task_ctrl = &OsTask.task_control;
-const TaskHandle = TaskQueue.TaskHandle;
 
 ///TODO: Change this based on the selected arch
 pub const DEFAULT_IDLE_TASK_SIZE = 17;
@@ -90,25 +88,46 @@ pub inline fn systemTick() void {
     }
 }
 
-pub fn validateOsCall() Error!*TaskHandle {
+pub fn validateCallMajor() Error!*Task {
     if (!os_started) return Error.OsOffline;
     const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
-    if (running_task._data.priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
+    if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
     if (arch.interruptActive()) return Error.IllegalInterruptAccess;
     return running_task;
 }
 
+pub fn validateCallMinor() Error!*Task {
+    if (!os_started) return Error.OsOffline;
+    const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
+    return running_task;
+}
+
+pub const EventContext = struct {
+    pending: usize = 0,
+    triggering: usize = 0,
+    pendOn: Operation = Operation.set,
+    aborted: bool = false,
+    timed_out: bool = false,
+
+    pub const Operation = enum {
+        set,
+        clear,
+    };
+};
+
 pub const Error = error{
-    ///The running task is null.  This is an illegal state once multi tasking as started.
+    /// The running task is null.  This is an illegal state once multi tasking as started.
     RunningTaskNull,
-    ///The operating system has not started multi tasking.
+    /// The operating system has not started multi tasking.
     OsOffline,
-    ///Illegal call from idle task
+    /// Illegal call from idle task
     IllegalIdleTask,
-    ///It is illegal to call this function from an interrupt
+    /// It is illegal to call this function from an interrupt
     IllegalInterruptAccess,
-    ///A task that does not own this os object attempted access
+    /// A task that does not own this os object attempted access
     TaskNotOwner,
-    ///Time out.
-    TimeOut,
+    /// Time out limit reached.
+    TimedOut,
+    /// Function manually aborted
+    Aborted,
 };

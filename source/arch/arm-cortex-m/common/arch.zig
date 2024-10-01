@@ -40,9 +40,9 @@ pub fn coreInit(self: *Self) void {
 
 pub fn initStack(self: *Self, task: *Task) void {
     _ = self;
-    task.stack_ptr = @intFromPtr(&task.stack.ptr[task.stack.len - 16]);
-    task.stack.ptr[task.stack.len - 1] = 0x1 << 24; // xPSR
-    task.stack.ptr[task.stack.len - 2] = @intFromPtr(&OsTask.taskTopRoutine); // PC
+    task._stack_ptr = @intFromPtr(&task._stack.ptr[task._stack.len - 16]);
+    task._stack.ptr[task._stack.len - 1] = 0x1 << 24; // xPSR
+    task._stack.ptr[task._stack.len - 2] = @intFromPtr(&OsTask.taskTopRoutine); // PC
 }
 
 pub fn interruptActive(self: *Self) bool {

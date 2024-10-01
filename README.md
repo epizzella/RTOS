@@ -6,8 +6,9 @@ A Real Time Operating System written in Zig
 
 - [X] Priority based scheduling
 - [X] 32 priority levels for user tasks plus 1 resevered priority level (lowest prioirty) for the idle task
-- [X] Unlimited task per priority level
-- [ ] Mutexes
+- [X] Unlimited tasks per priority level
+- [X] Mutexes
+  - [ ] Priority Inheritance
 - [ ] Semaphores
 - [ ] Event Groups
 - [ ] Messages Queues
