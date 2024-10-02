@@ -14,15 +14,17 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const OsTask = @import("source/os_task.zig");
 const OsCore = @import("source/os_core.zig");
-const builtin = @import("builtin");
+const OsTask = @import("source/os_task.zig");
+
 const ArchInterface = @import("source/arch/arch_interface.zig");
 
 var arch = ArchInterface.arch;
 
 pub const Mutex = @import("source/synchronization/os_mutex.zig");
 pub const Task = OsTask.Task;
+pub const EventGroup = @import("source/synchronization/event_group.zig");
+pub const EventOperation = OsCore.EventContext.Operation;
 pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 

@@ -49,8 +49,10 @@ pub fn createEventGroup(config: EventGroupConfig) Self {
 }
 
 pub fn initalize(self: *Self) void {
-    Control.add(self);
-    self._init = true;
+    if (!self._init) {
+        Control.add(self);
+        self._init = true;
+    }
 }
 
 const writeOptions = struct {
@@ -63,44 +65,46 @@ pub fn writeEvents(self: *Self, options: writeOptions) Error!void {
     defer arch.criticalEnd();
     self._event = options.event;
     var pending_task = self._group.head;
-
     var highest_pending_prio: usize = OsTask.IDLE_PRIORITY_LEVEL;
     while (true) {
         if (pending_task) |task| {
             var masked_event: usize = 0;
             switch (task._eventContext.pendOn) {
                 EventContext.Operation.set => {
-                    masked_event = @intFromEnum(self._event) & @intFromEnum(task._eventContext.pending);
+                    masked_event = self._event & task._eventContext.pending;
                 },
                 EventContext.Operation.clear => {
-                    masked_event = @intFromEnum(self._event) & ~@intFromEnum(task._eventContext.pending);
+                    masked_event = self._event & ~task._eventContext.pending;
                 },
             }
             if (masked_event > 0) {
-                task_control.addReady(task);
+                task_control.readyTask(task);
+                task._eventContext.triggering = self._event;
+                task._timeout = 0;
                 if (task._priority < highest_pending_prio) {
-                    highest_pending_prio = task.priority;
+                    highest_pending_prio = task._priority;
                 }
-                pending_task = task._to_tail;
-            } else {
-                break;
             }
-        }
-
-        if (highest_pending_prio < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
+            pending_task = task._to_tail;
+        } else {
+            break;
         }
     }
+
+    if (highest_pending_prio < running_task._priority) {
+        arch.criticalEnd();
+        arch.runScheduler();
+    }
 }
+
 const PendOptions = struct {
     event_mask: usize,
     PendOn: EventContext.Operation,
     timeout_ms: u32 = 0,
 };
 
-/// Block the running task until the event
-pub fn pendEvent(self: *Self, options: PendOptions) Error!void {
+/// Block the running task until the pending event is set
+pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
     const running_task = try OsCore.validateCallMajor();
     arch.criticalStart();
     defer arch.criticalEnd();
@@ -126,6 +130,8 @@ pub fn pendEvent(self: *Self, options: PendOptions) Error!void {
     } else {
         return Error.RunningTaskNull;
     }
+
+    return running_task._eventContext.triggering;
 }
 
 const AbortEventOptions = struct {
