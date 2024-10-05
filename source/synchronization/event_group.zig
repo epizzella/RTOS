@@ -68,19 +68,10 @@ pub fn writeEvents(self: *Self, options: writeOptions) Error!void {
     var highest_pending_prio: usize = OsTask.IDLE_PRIORITY_LEVEL;
     while (true) {
         if (pending_task) |task| {
-            var masked_event: usize = 0;
-            switch (task._eventContext.pendOn) {
-                EventContext.Operation.set => {
-                    masked_event = self._event & task._eventContext.pending;
-                },
-                EventContext.Operation.clear => {
-                    masked_event = self._event & ~task._eventContext.pending;
-                },
-            }
-            if (masked_event > 0) {
+            const event_triggered = checkEventTriggered(task._eventContext, self._event);
+            if (event_triggered) {
                 task_control.readyTask(task);
                 task._eventContext.triggering = self._event;
-                task._timeout = 0;
                 if (task._priority < highest_pending_prio) {
                     highest_pending_prio = task._priority;
                 }
@@ -103,35 +94,49 @@ const PendOptions = struct {
     timeout_ms: u32 = 0,
 };
 
-/// Block the running task until the pending event is set
+/// Block the running task until the pending event is set.  If the pending event
+/// is set when pendEvent is called the running task will not be blocked.
 pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
     const running_task = try OsCore.validateCallMajor();
+    running_task._eventContext.pending = options.event_mask;
+    running_task._eventContext.pendOn = options.PendOn;
+
     arch.criticalStart();
     defer arch.criticalEnd();
 
-    running_task._eventContext.pending = options.event_mask;
-    running_task._eventContext.pendOn = options.PendOn;
-    running_task._timeout = options.timeout_ms;
-
-    if (task_control.popActive()) |task| {
-        self._group.insertAfter(running_task, null);
-        task._timeout = options.timeout_ms;
-        task._state = OsTask.State.blocked;
-        arch.criticalEnd();
-        arch.runScheduler();
-        if (task._eventContext.timed_out) {
-            task._eventContext.timed_out = false;
-            return Error.TimedOut;
-        }
-        if (task._eventContext.aborted) {
-            task._eventContext.aborted = false;
-            return Error.Aborted;
-        }
+    const event_triggered = checkEventTriggered(running_task._eventContext, self._event);
+    if (event_triggered) {
+        running_task._eventContext.triggering = self._event;
     } else {
-        return Error.RunningTaskNull;
+        if (task_control.popActive()) |task| {
+            self._group.insertAfter(task, null);
+            task._timeout = options.timeout_ms;
+            task._state = OsTask.State.blocked;
+            arch.criticalEnd();
+            arch.runScheduler();
+            if (task._eventContext.timed_out) {
+                task._eventContext.timed_out = false;
+                return Error.TimedOut;
+            }
+            if (task._eventContext.aborted) {
+                task._eventContext.aborted = false;
+                return Error.Aborted;
+            }
+        } else {
+            return Error.RunningTaskNull;
+        }
     }
 
     return running_task._eventContext.triggering;
+}
+
+fn checkEventTriggered(eventContext: EventContext, current_event: usize) bool {
+    return switch (eventContext.pendOn) {
+        EventContext.Operation.set_all => (current_event & eventContext.pending) == current_event,
+        EventContext.Operation.clear_all => (~current_event & eventContext.pending) == current_event,
+        EventContext.Operation.set_any => current_event & eventContext.pending > 0,
+        EventContext.Operation.clear_any => ~current_event & eventContext.pending > 0,
+    };
 }
 
 const AbortEventOptions = struct {

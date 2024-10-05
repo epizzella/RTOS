@@ -105,13 +105,15 @@ pub fn validateCallMinor() Error!*Task {
 pub const EventContext = struct {
     pending: usize = 0,
     triggering: usize = 0,
-    pendOn: Operation = Operation.set,
+    pendOn: Operation = Operation.set_all,
     aborted: bool = false,
     timed_out: bool = false,
 
     pub const Operation = enum {
-        set,
-        clear,
+        set_all,
+        clear_all,
+        set_any,
+        clear_any,
     };
 };
 
@@ -122,7 +124,7 @@ pub const Error = error{
     OsOffline,
     /// Illegal call from idle task
     IllegalIdleTask,
-    /// It is illegal to call this function from an interrupt
+    /// Illegal call from interrupt
     IllegalInterruptAccess,
     /// A task that does not own this os object attempted access
     TaskNotOwner,
