@@ -89,7 +89,7 @@ export fn SVC_Handler() void {
     self.criticalEnd();
 }
 
-//TODO: CPSID I isn't executing first when the interrupt is entered.
+//TODO: CPSID I isn't executing first when the exception is entered.
 export fn PendSV_Handler() void {
     asm volatile ("" ++
             "   CPSID   I                                           \n"); //  disable interrupts
