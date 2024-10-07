@@ -39,7 +39,6 @@ pub fn create_task(config: OsTask.TaskConfig) Task {
     return Task.create_task(config);
 }
 
-export var g_stack_offset: u32 = 0x08;
 ///The operating system will begin multitasking.  This function never returns.
 pub fn startOS(comptime config: OsConfig) void {
     if (OsCore.isOsStarted() == false) {
@@ -64,7 +63,7 @@ pub fn startOS(comptime config: OsConfig) void {
         task_ctrl.initAllStacks();
 
         //Find offset to stack ptr as zig does not guarantee struct field order
-        g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
+        OsCore.g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
 
         OsCore.setOsStarted();
         arch.runScheduler(); //begin os

@@ -85,13 +85,13 @@ pub const IDLE_PRIORITY_LEVEL: u32 = 32;
 const PRIO_ADJUST: u5 = 31;
 const ONE: u32 = 0x1;
 
-const TaskControl = struct {
+pub const TaskControl = struct {
     table: [MAX_PRIO_LEVEL]TaskStateQ = [_]TaskStateQ{.{}} ** MAX_PRIO_LEVEL,
     ready_mask: u32 = 0, //          mask of ready tasks
     running_priority: u6 = 0x00, //  priority level of the currently running task
 
-    export var current_task: ?*volatile Task = null;
-    export var next_task: *volatile Task = undefined;
+    pub var current_task: ?*volatile Task = null;
+    pub var next_task: *volatile Task = undefined;
 
     pub fn initAllStacks(self: *TaskControl) void {
         if (!OsCore.isOsStarted()) {

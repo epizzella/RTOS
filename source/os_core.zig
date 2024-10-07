@@ -22,6 +22,8 @@ pub const Task = OsTask.Task;
 var arch = ArchInterface.arch;
 const task_ctrl = &OsTask.task_control;
 
+pub var g_stack_offset: u32 = 0x08;
+
 ///TODO: Change this based on the selected arch
 pub const DEFAULT_IDLE_TASK_SIZE = 17;
 ///1 Khz
