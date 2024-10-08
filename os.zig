@@ -24,7 +24,7 @@ var arch = ArchInterface.arch;
 pub const Mutex = @import("source/synchronization/os_mutex.zig");
 pub const Task = OsTask.Task;
 pub const EventGroup = @import("source/synchronization/event_group.zig");
-pub const EventOperation = OsCore.EventContext.Operation;
+pub const EventOperation = OsCore.SyncContext.EventTrigger;
 pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 
@@ -38,6 +38,8 @@ const task_ctrl = &OsTask.task_control;
 pub fn create_task(config: OsTask.TaskConfig) Task {
     return Task.create_task(config);
 }
+
+export var g_stack_offset: u32 = 0x08;
 
 ///The operating system will begin multitasking.  This function never returns.
 pub fn startOS(comptime config: OsConfig) void {
@@ -63,7 +65,7 @@ pub fn startOS(comptime config: OsConfig) void {
         task_ctrl.initAllStacks();
 
         //Find offset to stack ptr as zig does not guarantee struct field order
-        OsCore.g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
+        g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
 
         OsCore.setOsStarted();
         arch.runScheduler(); //begin os

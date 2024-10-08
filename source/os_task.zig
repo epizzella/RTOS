@@ -19,7 +19,7 @@ const ArchInterface = @import("arch/arch_interface.zig");
 
 var arch = ArchInterface.arch;
 const os_config = &OsCore.getOsConfig;
-const EventContext = OsCore.EventContext;
+const SyncContext = OsCore.SyncContext;
 
 pub const Task = struct {
     _stack: []u32,
@@ -29,11 +29,12 @@ pub const Task = struct {
     _subroutine: *const fn () anyerror!void,
     _subroutineErrHandler: ?*const fn (err: anyerror) void = null,
     _timeout: u32 = 0,
+    _timed_out: bool = false,
     _priority: u5,
     _basePriority: u5,
     _to_tail: ?*Task = null,
     _to_head: ?*Task = null,
-    _eventContext: EventContext = .{},
+    _SyncContext: SyncContext = .{},
     _init: bool = false,
     _name: []const u8,
 
@@ -88,10 +89,10 @@ const ONE: u32 = 0x1;
 pub const TaskControl = struct {
     table: [MAX_PRIO_LEVEL]TaskStateQ = [_]TaskStateQ{.{}} ** MAX_PRIO_LEVEL,
     ready_mask: u32 = 0, //          mask of ready tasks
-    running_priority: u6 = 0x00, //  priority level of the currently running task
+    running_priority: u6 = 0x00, //  priority level of the current running task
 
-    pub var current_task: ?*volatile Task = null;
-    pub var next_task: *volatile Task = undefined;
+    export var current_task: ?*volatile Task = null;
+    export var next_task: *volatile Task = undefined;
 
     pub fn initAllStacks(self: *TaskControl) void {
         if (!OsCore.isOsStarted()) {

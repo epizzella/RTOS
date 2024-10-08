@@ -89,29 +89,6 @@ export fn SVC_Handler() void {
     self.criticalEnd();
 }
 
-//TODO: CPSID I isn't executing first when the exception is entered.
-export fn PendSV_Handler() void {
-    asm volatile ("" ++
-            "   CPSID   I                                           \n"); //  disable interrupts
-    asm volatile ("" ++
-            "   LDR     R2,     [%[current_task]]                   \n" ++
-            "   CMP.W   R2,     #0                                  \n" ++ // if current_task != null
-            "   BEQ.N   SpEqlNextSp                                 \n" ++
-            "   PUSH    {R4-R11}                                    \n" ++ // push registers r4-r11 on the stack
-            "   STR     SP,     [R2, %[offset]]                     \n" ++ // save the current stack pointer in current_task
-            "SpEqlNextSp:                                           \n" ++
-            "   LDR     SP, [%[next_task], %[offset]]               \n" ++ // Set stack pointer to next_task stack pointer
-            "   STR     %[next_task],   [%[current_task], #0x00]    \n" ++ // Set current_task to next_task
-            "   POP     {r4-r11}                                    \n" ++ // pop registers r4-r11
-            "   CPSIE   I                                           \n" //    enable interrupts
-        :
-        : [current_task] "l" (&OsTask.TaskControl.current_task),
-          [next_task] "l" (OsTask.TaskControl.next_task),
-          [offset] "l" (OsCore.g_stack_offset),
-        : "R2"
-    );
-}
-
 /////////////////////////////////////////////
 //   System Control Register Addresses    //
 ///////////////////////////////////////////

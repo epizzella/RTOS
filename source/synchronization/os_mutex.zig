@@ -65,7 +65,14 @@ pub fn acquire(self: *Self, options: AquireOptions) Error!void {
             task._state = OsTask.State.blocked;
             arch.criticalEnd();
             arch.runScheduler();
-            if (task._state == OsTask.State.blocked_timedout) return Error.TimedOut;
+            if (task._SyncContext.timed_out) {
+                task._SyncContext.timed_out = false;
+                return Error.TimedOut;
+            }
+            if (task._SyncContext.aborted) {
+                task._SyncContext.aborted = false;
+                return Error.Aborted;
+            }
         } else {
             return Error.RunningTaskNull;
         }
@@ -91,5 +98,21 @@ pub fn release(self: *Self) Error!void {
         }
     } else {
         return Error.TaskNotOwner;
+    }
+}
+
+/// Readys the task if it is waiting on the mutex.  When the task next
+/// runs acquire() will return OsError.Aborted
+pub fn abortPend(self: *Self, task: OsTask) Error!void {
+    const running_task = try OsCore.validateCallMinor();
+    if (!self._init) return Error.Uninitialized;
+
+    arch.criticalStart();
+    defer arch.criticalEnd();
+    task._SyncContext.aborted = true;
+    task_control.readyTask(task);
+    if (task.priority < running_task._priority) {
+        arch.criticalEnd();
+        arch.runScheduler();
     }
 }

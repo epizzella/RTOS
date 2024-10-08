@@ -43,7 +43,7 @@ pub fn getSyncControl(T: type) type {
                     while (true) {
                         if (task._timeout > 0) {
                             task._timeout -= 1;
-                            if (task._timeout == 0) task._state = OsTask.State.blocked_timedout;
+                            if (task._timeout == 0) task._SyncContext.timed_out = true;
                         }
 
                         if (task._to_tail) |next| {

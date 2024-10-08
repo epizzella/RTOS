@@ -23,14 +23,14 @@ const ArchInterface = @import("../arch/arch_interface.zig");
 const Self = @This();
 var arch = ArchInterface.arch;
 const Error = OsCore.Error;
-const EventContext = OsCore.EventContext;
+const EventContext = OsCore.SyncContext;
 const task_control = &OsTask.task_control;
 
 pub const Control = SyncControl.getSyncControl(Self);
 
 _name: []const u8,
 _event: usize,
-_group: TaskQueue,
+_pending: TaskQueue,
 _next: ?*Self,
 _init: bool = false,
 
@@ -43,7 +43,7 @@ pub fn createEventGroup(config: EventGroupConfig) Self {
     return Self{
         ._name = config.name,
         ._event = 0,
-        ._group = .{},
+        ._pending = .{},
         ._next = null,
     };
 }
@@ -59,19 +59,21 @@ const writeOptions = struct {
     event: usize,
 };
 
-pub fn writeEvents(self: *Self, options: writeOptions) Error!void {
+pub fn writeEvent(self: *Self, options: writeOptions) Error!void {
     const running_task = try OsCore.validateCallMinor();
+    if (!self._init) return Error.Uninitialized;
+
     arch.criticalStart();
     defer arch.criticalEnd();
     self._event = options.event;
-    var pending_task = self._group.head;
+    var pending_task = self._pending.head;
     var highest_pending_prio: usize = OsTask.IDLE_PRIORITY_LEVEL;
     while (true) {
         if (pending_task) |task| {
-            const event_triggered = checkEventTriggered(task._eventContext, self._event);
+            const event_triggered = checkEventTriggered(task._SyncContext, self._event);
             if (event_triggered) {
                 task_control.readyTask(task);
-                task._eventContext.triggering = self._event;
+                task._SyncContext.triggering_event = self._event;
                 if (task._priority < highest_pending_prio) {
                     highest_pending_prio = task._priority;
                 }
@@ -90,7 +92,7 @@ pub fn writeEvents(self: *Self, options: writeOptions) Error!void {
 
 const PendOptions = struct {
     event_mask: usize,
-    PendOn: EventContext.Operation,
+    PendOn: EventContext.EventTrigger,
     timeout_ms: u32 = 0,
 };
 
@@ -98,28 +100,30 @@ const PendOptions = struct {
 /// is set when pendEvent is called the running task will not be blocked.
 pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
     const running_task = try OsCore.validateCallMajor();
-    running_task._eventContext.pending = options.event_mask;
-    running_task._eventContext.pendOn = options.PendOn;
+    if (!self._init) return Error.Uninitialized;
+
+    running_task._SyncContext.pending_event = options.event_mask;
+    running_task._SyncContext.trigger_type = options.PendOn;
 
     arch.criticalStart();
     defer arch.criticalEnd();
 
-    const event_triggered = checkEventTriggered(running_task._eventContext, self._event);
+    const event_triggered = checkEventTriggered(running_task._SyncContext, self._event);
     if (event_triggered) {
-        running_task._eventContext.triggering = self._event;
+        running_task._SyncContext.triggering_event = self._event;
     } else {
         if (task_control.popActive()) |task| {
-            self._group.insertAfter(task, null);
+            self._pending.insertAfter(task, null);
             task._timeout = options.timeout_ms;
             task._state = OsTask.State.blocked;
             arch.criticalEnd();
             arch.runScheduler();
-            if (task._eventContext.timed_out) {
-                task._eventContext.timed_out = false;
+            if (task._SyncContext.timed_out) {
+                task._SyncContext.timed_out = false;
                 return Error.TimedOut;
             }
-            if (task._eventContext.aborted) {
-                task._eventContext.aborted = false;
+            if (task._SyncContext.aborted) {
+                task._SyncContext.aborted = false;
                 return Error.Aborted;
             }
         } else {
@@ -127,15 +131,15 @@ pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
         }
     }
 
-    return running_task._eventContext.triggering;
+    return running_task._SyncContext.triggering_event;
 }
 
 fn checkEventTriggered(eventContext: EventContext, current_event: usize) bool {
-    return switch (eventContext.pendOn) {
-        EventContext.Operation.set_all => (current_event & eventContext.pending) == current_event,
-        EventContext.Operation.clear_all => (~current_event & eventContext.pending) == current_event,
-        EventContext.Operation.set_any => current_event & eventContext.pending > 0,
-        EventContext.Operation.clear_any => ~current_event & eventContext.pending > 0,
+    return switch (eventContext.trigger_type) {
+        EventContext.EventTrigger.set_all => (current_event & eventContext.pending_event) == current_event,
+        EventContext.EventTrigger.clear_all => (~current_event & eventContext.pending_event) == current_event,
+        EventContext.EventTrigger.set_any => current_event & eventContext.pending_event > 0,
+        EventContext.EventTrigger.clear_any => ~current_event & eventContext.pending_event > 0,
     };
 }
 
@@ -146,12 +150,13 @@ const AbortEventOptions = struct {
 /// Readys the task if it is waiting on the event group.  When the task next
 /// runs pendEvent() will return OsError.Aborted
 pub fn abortPend(self: *Self, options: AbortEventOptions) Error!void {
-    _ = self;
     const running_task = try OsCore.validateCallMinor();
+    if (!self._init) return Error.Uninitialized;
+
     arch.criticalStart();
     defer arch.criticalEnd();
-    options.task._eventContext.aborted = true;
-    task_control.addReady(options.task);
+    options.task._SyncContext.aborted = true;
+    task_control.readyTask(options.task);
     if (options.task.priority < running_task._priority) {
         arch.criticalEnd();
         arch.runScheduler();

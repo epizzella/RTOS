@@ -16,13 +16,12 @@
 
 const OsTask = @import("os_task.zig");
 const Mutex = @import("synchronization/os_mutex.zig");
+const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 pub const Task = OsTask.Task;
 
 var arch = ArchInterface.arch;
 const task_ctrl = &OsTask.task_control;
-
-pub var g_stack_offset: u32 = 0x08;
 
 ///TODO: Change this based on the selected arch
 pub const DEFAULT_IDLE_TASK_SIZE = 17;
@@ -84,6 +83,7 @@ pub inline fn systemTick() void {
 
     if (os_started) {
         Mutex.Control.updateTimeOut();
+        EventGroup.Control.updateTimeOut();
         task_ctrl.updateTasksDelay();
         task_ctrl.cycleActive();
         schedule();
@@ -104,19 +104,25 @@ pub fn validateCallMinor() Error!*Task {
     return running_task;
 }
 
-pub const EventContext = struct {
-    pending: usize = 0,
-    triggering: usize = 0,
-    pendOn: Operation = Operation.set_all,
+pub const SyncContext = struct {
+    //Event context
+    pending_event: usize = 0,
+    triggering_event: usize = 0,
+    trigger_type: EventTrigger = EventTrigger.set_all,
+    //Common Sync Context
     aborted: bool = false,
     timed_out: bool = false,
 
-    pub const Operation = enum {
+    pub const EventTrigger = enum {
         set_all,
         clear_all,
         set_any,
         clear_any,
     };
+};
+
+pub const MutexContext = struct {
+    aborted: bool = false,
 };
 
 pub const Error = error{
@@ -134,4 +140,6 @@ pub const Error = error{
     TimedOut,
     /// Function manually aborted
     Aborted,
+    /// Os Object not initalized
+    Uninitialized,
 };
