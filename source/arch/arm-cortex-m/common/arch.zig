@@ -8,41 +8,45 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,          
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const OS_TASK = @import("../../../os_task.zig");
-const OS_CORE = @import("../../../os_core.zig");
+const OsTask = @import("../../../os_task.zig");
+const OsCore = @import("../../../os_core.zig");
 
-const task_ctrl_tbl = &OS_TASK.task_control;
-const os_config = &OS_CORE._getOsConfig;
-const os_started = &OS_CORE._isOsStarted;
+const task_ctrl = &OsTask.task_control;
+const Task = OsTask.Task;
 
-const Self = @This();
+pub const Self = @This();
+
+/////////////////////////////////////////////
+//        System Control Registers        //
+///////////////////////////////////////////
+ICSR: *volatile ICSR_REG = @ptrFromInt(ICSR_ADDRESS),
+SHPR3: *volatile SHPR3_REG = @ptrFromInt(SHPR3_ADDRESS),
+DEMCR: *volatile DEMCR_REG = @ptrFromInt(DEMCR_ADDRESS),
+DHCSR: *volatile DHCSR_REG = @ptrFromInt(DHCSR_ADDRESS),
 
 /////////////////////////////////////////////////////////
 //    Architecture specific Function Implemntations   //
 ///////////////////////////////////////////////////////
-fn schedule() void {
-    var self = Self{};
-    task_ctrl_tbl.readyNextTask();
-    if (task_ctrl_tbl.validSwitch()) {
-        self.runContextSwitch();
-    }
+pub fn coreInit(self: *Self) void {
+    self.SHPR3.PRI_PENDSV = LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
+    self.SHPR3.PRI_SYSTICK = ~LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
 }
 
-pub fn coreInit(self: *Self) void {
+pub fn initStack(self: *Self, task: *Task) void {
     _ = self;
-    SHPR3.PRI_PENDSV = LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
-    SHPR3.PRI_SYSTICK = ~LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
+    task._stack_ptr = @intFromPtr(&task._stack.ptr[task._stack.len - 16]);
+    task._stack.ptr[task._stack.len - 1] = 0x1 << 24; // xPSR
+    task._stack.ptr[task._stack.len - 2] = @intFromPtr(&OsTask.taskTopRoutine); // PC
 }
 
 pub fn interruptActive(self: *Self) bool {
-    _ = self;
-    return ICSR.VECTACTIVE > 0;
+    return self.ICSR.VECTACTIVE > 0;
 }
 
 ///Enable Interrupts
@@ -59,17 +63,15 @@ pub inline fn criticalStart(self: *Self) void {
 
 pub inline fn runScheduler(self: *Self) void {
     _ = self;
-    asm volatile ("SVC      #0");
+    asm volatile ("SVC    #0");
 }
 
 pub inline fn runContextSwitch(self: *Self) void {
-    _ = self;
-    ICSR.PENDSVSET = true;
+    self.ICSR.PENDSVSET = true;
 }
 
 pub inline fn isDebugAttached(self: *Self) bool {
-    _ = self;
-    return DHCSR.C_DEBUGEN;
+    return self.DHCSR.C_DEBUGEN;
 }
 
 /////////////////////////////////////////////
@@ -77,21 +79,13 @@ pub inline fn isDebugAttached(self: *Self) bool {
 ///////////////////////////////////////////
 
 export fn SysTick_Handler() void {
-    if (os_config().sysTick_callback) |callback| {
-        callback();
-    }
-
-    if (os_started()) {
-        task_ctrl_tbl.updateTasksDelay();
-        task_ctrl_tbl.cycleActive();
-        schedule();
-    }
+    OsCore.systemTick();
 }
 
 export fn SVC_Handler() void {
     var self = Self{};
     self.criticalStart();
-    schedule();
+    OsCore.schedule();
     self.criticalEnd();
 }
 
@@ -145,11 +139,10 @@ const DEMCR_ADDRESS: u32 = 0xE000EDFC; // Exception and Monitor Control Register
 const LOWEST_PRIO_MSK: u8 = 0xFF;
 
 /////////////////////////////////////////////
-//       System Control Registers         //
+//    System Control Register Structs     //
 ///////////////////////////////////////////
 const REGISTER_SIZE = 32; //32 bit registers
 
-const ICSR: *volatile ICSR_REG = @ptrFromInt(ICSR_ADDRESS);
 const ICSR_REG = packed struct {
     /// RO - Current executing exception's number. A value of 0 = Thread mode
     VECTACTIVE: u9,
@@ -181,7 +174,6 @@ const ICSR_REG = packed struct {
     }
 };
 
-const SHPR3: *volatile SHPR3_REG = @ptrFromInt(SHPR3_ADDRESS);
 const SHPR3_REG = packed struct {
     /// RW - Systme Handler 12 Priority
     PRI_DEBUG_MON: u8,
@@ -196,7 +188,6 @@ const SHPR3_REG = packed struct {
     }
 };
 
-const DEMCR: *volatile SHPR3_REG = @ptrFromInt(DEMCR_ADDRESS);
 const DEMCR_REG = packed struct {
     /// RW - Enable Reset Vector Catch.  This will cause a local reset to halt the system.
     VC_CORERESET: bool,
@@ -234,7 +225,6 @@ const DEMCR_REG = packed struct {
     }
 };
 
-const DHCSR: *volatile DHCSR_REG = @ptrFromInt(DHCSR_ADDRESS);
 const DHCSR_REG = packed struct {
     /// RO - 0 = No debugger attached; 1 = Debugger attached
     C_DEBUGEN: bool,
