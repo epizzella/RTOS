@@ -16,6 +16,7 @@
 
 const OsTask = @import("task.zig");
 const Mutex = @import("synchronization/mutex.zig");
+const Semaphore = @import("synchronization/semaphore.zig");
 const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 pub const Task = OsTask.Task;
@@ -108,15 +109,61 @@ pub const SyncContext = struct {
 
 var ticks: u64 = 0;
 
-/// Get the current number of elapsed ticks
-pub fn getTicks() u64 {
-    return ticks;
-}
+pub const Time = struct {
+    const math = @import("std").math;
 
-/// Get the current number of elapsed ticks as milliseconds (rounded down)
-pub fn getTicksMs() u64 {
-    return (ticks * 1000) / os_config.system_clock_freq_hz;
-}
+    /// Get the current number of elapsed ticks
+    pub fn getTicks() u64 {
+        return ticks;
+    }
+
+    /// Get the current number of elapsed ticks as milliseconds (rounded down)
+    pub fn getTicksMs() u64 {
+        return (ticks * 1000) / os_config.system_clock_freq_hz;
+    }
+
+    /// Put the active task to sleep.  It will become ready to run again after `time_ms` milliseconds.
+    /// * `time_ms` when converted to system ticks cannot exceed 2^32 system ticks.
+    pub fn delay(time_ms: u32) Error!void {
+        var running_task = try validateCallMajor();
+        if (time_ms != 0) {
+            var timeout: u32 = math.mul(u32, time_ms, os_config.system_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
+            timeout /= 1000;
+            arch.criticalStart();
+            task_ctrl.yeildTask(running_task);
+            running_task._timeout = timeout;
+            arch.criticalEnd();
+            arch.runScheduler();
+        }
+    }
+
+    pub const SleepTime = struct {
+        ms: u32 = 0,
+        sec: u32 = 0,
+        min: u32 = 0,
+        hr: u32 = 0,
+        days: u32 = 0,
+    };
+
+    fn sleepTimeToMs(time: *SleepTime) !u32 {
+        var total_ms = time.ms;
+        var temp_ms = try math.mul(u32, time.sec, 1000);
+        total_ms = try math.add(u32, total_ms, temp_ms);
+        temp_ms = try math.mul(u32, time.min, 60_000);
+        total_ms = try math.add(u32, total_ms, temp_ms);
+        temp_ms = try math.mul(u32, time.hr, 3_600_000);
+        total_ms = try math.add(u32, total_ms, temp_ms);
+        temp_ms = try math.mul(u32, time.hr, 86_400_000);
+        total_ms = try math.add(u32, total_ms, temp_ms);
+        return total_ms;
+    }
+
+    /// Put the active task to sleep.  The value of time must be less than 2^32 milliseconds (~49.7 days) and 2^32 system ticks.
+    pub fn sleep(time: SleepTime) Error!void {
+        const timeout = sleepTimeToMs(&time) catch return Error.SleepDurationOutOfRange;
+        try delay(timeout);
+    }
+};
 
 ///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
 pub inline fn systemTick() void {
@@ -127,6 +174,7 @@ pub inline fn systemTick() void {
     if (os_started) {
         ticks +%= 1;
         Mutex.Control.updateTimeOut();
+        Semaphore.Control.updateTimeOut();
         EventGroup.Control.updateTimeOut();
         task_ctrl.updateTasksDelay();
         task_ctrl.cycleActive();
@@ -153,4 +201,6 @@ pub const Error = error{
     Uninitialized,
     /// The task is not blocked by the OS object
     ObjectNotBlocking,
+    /// The amount of time specified for the task to sleep exceeds the max value of 2^32 ms
+    SleepDurationOutOfRange,
 };
