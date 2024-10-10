@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const OsTask = @import("../os_task.zig");
+const task_control = &OsTask.task_control;
 
 pub fn getSyncControl(T: type) type {
     comptime {
@@ -35,6 +36,7 @@ pub fn getSyncControl(T: type) type {
             new._init = true;
         }
 
+        /// Update the timeout of all the task pending on the synchronization object
         pub fn updateTimeOut() void {
             var syncObj = list orelse return;
             while (true) {
@@ -44,6 +46,7 @@ pub fn getSyncControl(T: type) type {
                         if (task._timeout > 0) {
                             task._timeout -= 1;
                             if (task._timeout == 0) task._SyncContext.timed_out = true;
+                            task_control.readyTask(task);
                         }
 
                         if (task._to_tail) |next| {

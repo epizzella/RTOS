@@ -36,16 +36,24 @@ _pending: TaskQueue = .{},
 _next: ?*Self = null,
 _init: bool = false,
 
+/// Create a mutex object
 pub fn create_mutex(comptime name: []const u8) Self {
     return Self{
         ._name = name,
     };
 }
 
-const AquireOptions = struct {
+pub const AquireOptions = struct {
+    /// An optional timeout in milliseconds.  When set to a non-zero value the task
+    /// will block for the amount of time specified. If the timeout expires before
+    /// the mutex is unlocked acquire() will return OsError.TimedOut. When set to
+    /// zero the task will block until the mutex unlocks.
     timeout_ms: u32 = 0,
 };
 
+/// Locks the mutex and gives the calling task ownership. If the mutex
+/// is lock when acquire() is called the running task will be blocked until
+/// the mutex is unlocked. Cannot be called from an interrupt.
 pub fn acquire(self: *Self, options: AquireOptions) Error!void {
     const running_task = try OsCore.validateCallMajor();
     arch.criticalStart();
@@ -82,6 +90,9 @@ pub fn acquire(self: *Self, options: AquireOptions) Error!void {
     }
 }
 
+/// Unlocks the mutex and removes ownership from the running task. If the
+/// running task is not the owner OsError.TaskNotOwner is returned. Cannot be
+/// called from an interrupt.
 pub fn release(self: *Self) Error!void {
     arch.criticalStart();
     defer arch.criticalEnd();
@@ -89,8 +100,8 @@ pub fn release(self: *Self) Error!void {
 
     if (active_task == self._owner) {
         self._owner = self._pending.head;
-        if (self._pending.pop()) |head| {
-            task_control.addReady(head);
+        if (self._owner) |head| {
+            task_control.readyTask(head);
             if (head._priority < task_control.running_priority) {
                 arch.criticalEnd();
                 arch.runScheduler();
@@ -101,14 +112,19 @@ pub fn release(self: *Self) Error!void {
     }
 }
 
-/// Readys the task if it is waiting on the mutex.  When the task next
-/// runs acquire() will return OsError.Aborted
-pub fn abortPend(self: *Self, task: OsTask) Error!void {
+/// Readys the task if it is waiting on the mutex. When the task next
+/// runs acquire() will return OsError.Aborted.
+/// * task - The task to abort & ready
+pub fn abortAcquire(self: *Self, task: OsTask) Error!void {
     const running_task = try OsCore.validateCallMinor();
     if (!self._init) return Error.Uninitialized;
 
     arch.criticalStart();
     defer arch.criticalEnd();
+
+    var q = task._queue orelse return Error.ObjectNotBlocking;
+    if (!q.contains(task)) return Error.ObjectNotBlocking;
+
     task._SyncContext.aborted = true;
     task_control.readyTask(task);
     if (task.priority < running_task._priority) {

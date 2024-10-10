@@ -16,15 +16,14 @@
 
 const OsCore = @import("source/os_core.zig");
 const OsTask = @import("source/os_task.zig");
-
 const ArchInterface = @import("source/arch/arch_interface.zig");
 
 var arch = ArchInterface.arch;
 
-pub const Mutex = @import("source/synchronization/os_mutex.zig");
 pub const Task = OsTask.Task;
+pub const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
+pub const Mutex = @import("source/synchronization/os_mutex.zig");
 pub const EventGroup = @import("source/synchronization/event_group.zig");
-pub const EventOperation = OsCore.SyncContext.EventTrigger;
 pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 

@@ -44,17 +44,17 @@ fn idle_subroutine() !void {
     while (true) {}
 }
 
-/// `system_clock_period_ms` - The frequency of the system clock in hz.  Note:  This does not set
-/// the system clock.  This only informs the OS of the system clock's frequenncy.  Default = 1000hz.
-/// `idle_task_subroutine` - function run by the idle task. Replaces the default idle task.  This
-/// subroutine cannot be suspended or blocked;
-/// `idle_stack_size` - number of words in the idle task stack.   Note:  if idle_task_subroutine is
-/// provided idle_stack_size must be larger than 17;
-/// `sysTick_callback` - function run at the beginning of the sysTick interrupt;
 pub const OsConfig = struct {
+    /// The frequency of the system clock in hz.  Note:  This does not set
+    /// the system clock.  This only informs the OS of the system clock's frequenncy.  Default = 1000hz.
     system_clock_freq_hz: u32 = DEFAULT_SYS_CLK_FREQ,
+    /// Function run by the idle task. Replaces the default idle task.  This
+    /// subroutine cannot be suspended or blocked;
     idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
+    /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is
+    /// provided idle_stack_size must be larger than 17;
     idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
+    /// Function run at the beginning of the sysTick interrupt;
     sysTick_callback: ?*const fn () void = null,
 };
 
@@ -69,7 +69,7 @@ pub fn isOsStarted() bool {
 }
 
 pub fn schedule() void {
-    task_ctrl.readyNextTask();
+    task_ctrl.setNextRunningTask();
     if (task_ctrl.validSwitch()) {
         arch.runContextSwitch();
     }
@@ -108,16 +108,16 @@ pub const SyncContext = struct {
     //Event context
     pending_event: usize = 0,
     triggering_event: usize = 0,
-    trigger_type: EventTrigger = EventTrigger.set_all,
+    trigger_type: EventTrigger = EventTrigger.all_set,
     //Common Sync Context
     aborted: bool = false,
     timed_out: bool = false,
 
     pub const EventTrigger = enum {
-        set_all,
-        clear_all,
-        set_any,
-        clear_any,
+        all_set,
+        all_clear,
+        any_set,
+        any_clear,
     };
 };
 
@@ -134,7 +134,7 @@ pub const Error = error{
     IllegalIdleTask,
     /// Illegal call from interrupt
     IllegalInterruptAccess,
-    /// A task that does not own this os object attempted access
+    /// A task that does not own this OS object attempted access
     TaskNotOwner,
     /// Time out limit reached.
     TimedOut,
@@ -142,4 +142,6 @@ pub const Error = error{
     Aborted,
     /// Os Object not initalized
     Uninitialized,
+    /// The task is not blocked by the OS object
+    ObjectNotBlocking,
 };

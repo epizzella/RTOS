@@ -34,11 +34,14 @@ _pending: TaskQueue,
 _next: ?*Self,
 _init: bool = false,
 
+pub const EventTrigger = OsCore.SyncContext.EventTrigger;
+
 const EventGroupConfig = struct {
     //Name of the event group
     name: []const u8,
 };
 
+/// Create an event group object
 pub fn createEventGroup(config: EventGroupConfig) Self {
     return Self{
         ._name = config.name,
@@ -48,6 +51,7 @@ pub fn createEventGroup(config: EventGroupConfig) Self {
     };
 }
 
+/// Add the event group to the OS
 pub fn initalize(self: *Self) void {
     if (!self._init) {
         Control.add(self);
@@ -56,9 +60,11 @@ pub fn initalize(self: *Self) void {
 }
 
 const writeOptions = struct {
+    /// The event flag
     event: usize,
 };
 
+/// Set the event flag of an event group
 pub fn writeEvent(self: *Self, options: writeOptions) Error!void {
     const running_task = try OsCore.validateCallMinor();
     if (!self._init) return Error.Uninitialized;
@@ -90,15 +96,24 @@ pub fn writeEvent(self: *Self, options: writeOptions) Error!void {
     }
 }
 
-const PendOptions = struct {
+/// Read the event flag from the event group
+pub fn readEvent(self: *Self) Error!usize {
+    if (!self._init) return Error.Uninitialized;
+    return self._event;
+}
+
+pub const PendEventOptions = struct {
+    /// The event bits to pend on
     event_mask: usize,
-    PendOn: EventContext.EventTrigger,
+    /// The state change of the event bits to pend on
+    PendOn: EventTrigger,
+    /// The timeout in milliseconds.  Set to 0 to pend indefinitely.
     timeout_ms: u32 = 0,
 };
 
 /// Block the running task until the pending event is set.  If the pending event
 /// is set when pendEvent is called the running task will not be blocked.
-pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
+pub fn pendEvent(self: *Self, options: PendEventOptions) Error!usize {
     const running_task = try OsCore.validateCallMajor();
     if (!self._init) return Error.Uninitialized;
 
@@ -136,14 +151,15 @@ pub fn pendEvent(self: *Self, options: PendOptions) Error!usize {
 
 fn checkEventTriggered(eventContext: EventContext, current_event: usize) bool {
     return switch (eventContext.trigger_type) {
-        EventContext.EventTrigger.set_all => (current_event & eventContext.pending_event) == current_event,
-        EventContext.EventTrigger.clear_all => (~current_event & eventContext.pending_event) == current_event,
-        EventContext.EventTrigger.set_any => current_event & eventContext.pending_event > 0,
-        EventContext.EventTrigger.clear_any => ~current_event & eventContext.pending_event > 0,
+        EventTrigger.all_set => (current_event & eventContext.pending_event) == current_event,
+        EventTrigger.all_clear => (~current_event & eventContext.pending_event) == current_event,
+        EventTrigger.any_set => current_event & eventContext.pending_event > 0,
+        EventTrigger.any_clear => ~current_event & eventContext.pending_event > 0,
     };
 }
 
-const AbortEventOptions = struct {
+pub const AbortEventOptions = struct {
+    /// The task to abort pend and ready
     task: Task,
 };
 
@@ -155,6 +171,10 @@ pub fn abortPend(self: *Self, options: AbortEventOptions) Error!void {
 
     arch.criticalStart();
     defer arch.criticalEnd();
+
+    var q = options.task._queue orelse return Error.ObjectNotBlocking;
+    if (!q.contains(options.task)) return Error.ObjectNotBlocking;
+
     options.task._SyncContext.aborted = true;
     task_control.readyTask(options.task);
     if (options.task.priority < running_task._priority) {

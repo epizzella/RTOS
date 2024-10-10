@@ -94,6 +94,7 @@ pub const TaskControl = struct {
     export var current_task: ?*volatile Task = null;
     export var next_task: *volatile Task = undefined;
 
+    ///Initalize the stacks for every task added to the OS
     pub fn initAllStacks(self: *TaskControl) void {
         if (!OsCore.isOsStarted()) {
             for (&self.table) |*row| {
@@ -117,13 +118,13 @@ pub const TaskControl = struct {
         self.ready_mask |= ONE << (priorityAdjust[priority]);
     }
 
+    ///Set task ready to run
     pub fn readyTask(self: *TaskControl, task: *Task) void {
-        if (task._queue) |q| {
-            _ = q.remove(task);
-        }
+        if (task._queue) |q| _ = q.remove(task);
         self.addReady(task);
     }
 
+    ///Set task as yeilded
     pub fn yeildTask(self: *TaskControl, task: *Task) void {
         if (task._queue) |q| _ = q.remove(task);
         if (self.table[task._priority].ready_tasks.head == null) {
@@ -132,6 +133,7 @@ pub const TaskControl = struct {
         self.addYeilded(task);
     }
 
+    ///Set task as suspended
     pub fn suspendTask(self: *TaskControl, task: *Task) void {
         if (task._queue) |q| _ = q.remove(task);
         if (self.table[task._priority].ready_tasks.head == null) {
@@ -141,7 +143,7 @@ pub const TaskControl = struct {
     }
 
     ///Add task to the active task queue
-    pub fn addReady(self: *TaskControl, task: *Task) void {
+    fn addReady(self: *TaskControl, task: *Task) void {
         self.table[task._priority].ready_tasks.insertAfter(task, null);
         self.setReadyBit(task._priority);
         task._state = State.ready;
@@ -149,13 +151,13 @@ pub const TaskControl = struct {
     }
 
     ///Add task to the yielded task queue
-    pub fn addYeilded(self: *TaskControl, task: *Task) void {
+    fn addYeilded(self: *TaskControl, task: *Task) void {
         self.table[task._priority].yielded_tasks.insertAfter(task, null);
         task._state = State.yeilded;
     }
 
     ///Add task to the suspended task queue
-    pub fn addSuspended(self: *TaskControl, task: *Task) void {
+    fn addSuspended(self: *TaskControl, task: *Task) void {
         self.table[task._priority].suspended_tasks.insertAfter(task, null);
         if (task._state != State.exited) task._state = State.suspended;
     }
@@ -178,7 +180,7 @@ pub const TaskControl = struct {
     }
 
     ///Set `next_task` to the highest priority task that is ready to run
-    pub fn readyNextTask(self: *TaskControl) void {
+    pub fn setNextRunningTask(self: *TaskControl) void {
         self.running_priority = @clz(self.ready_mask);
         next_task = self.table[self.running_priority].ready_tasks.head.?;
         next_task._state = State.running;
