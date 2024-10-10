@@ -24,10 +24,8 @@ pub const Task = OsTask.Task;
 var arch = ArchInterface.arch;
 const task_ctrl = &OsTask.task_control;
 
-///TODO: Change this based on the selected arch
-pub const DEFAULT_IDLE_TASK_SIZE = 17;
-///1 Khz
-const DEFAULT_SYS_CLK_FREQ = 1000;
+pub const DEFAULT_IDLE_TASK_SIZE = 17; //TODO: Change this based on the selected arch
+const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
 
 var os_config: OsConfig = .{};
 
@@ -64,11 +62,12 @@ pub fn setOsStarted() void {
     os_started = true;
 }
 
-///Returns true is the OS was started
+/// Returns true when the OS is running
 pub fn isOsStarted() bool {
     return os_started;
 }
 
+/// Schedule the next task to run
 pub fn schedule() void {
     task_ctrl.setNextRunningTask();
     if (task_ctrl.validSwitch()) {

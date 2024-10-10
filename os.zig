@@ -35,7 +35,7 @@ pub fn init() void {
 const task_ctrl = &OsTask.task_control;
 
 ///Returns a new task.
-pub fn create_task(config: OsTask.TaskConfig) Task {
+pub fn create_task(config: OsTask.Task.TaskConfig) Task {
     return Task.create_task(config);
 }
 

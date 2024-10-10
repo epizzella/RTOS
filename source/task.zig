@@ -20,8 +20,11 @@ const ArchInterface = @import("arch/arch_interface.zig");
 var arch = ArchInterface.arch;
 const os_config = &OsCore.getOsConfig;
 const SyncContext = OsCore.SyncContext;
+const Error = OsCore.Error;
 
 pub const Task = struct {
+    const Self = @This();
+
     _stack: []u32,
     _stack_ptr: usize,
     _state: State = State.ready,
@@ -38,8 +41,21 @@ pub const Task = struct {
     _init: bool = false,
     _name: []const u8,
 
-    const Self = @This();
+    pub const TaskConfig = struct {
+        /// Task name
+        name: []const u8,
+        /// Task stack
+        stack: []u32,
+        /// Function executed by task
+        subroutine: *const fn () anyerror!void,
+        /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
+        /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
+        subroutineErrHandler: ?*const fn (err: anyerror) void = null,
+        ///Priority level of the task.  Lower number = higher priority.
+        priority: u5,
+    };
 
+    /// Create a task
     pub fn create_task(config: TaskConfig) Task {
         return Task{
             ._name = config.name,
@@ -53,29 +69,28 @@ pub const Task = struct {
         };
     }
 
+    /// Add task to the OS
     pub fn init(self: *Self) void {
         if (!self._init) {
             task_control.addReady(self);
             self._init = true;
         }
     }
+
+    /// Suspend the task
+    pub fn suspendMe(self: *Self) Error!void {
+        if (!self._init) return OsCore.Error.Uninitialized;
+        task_control.addSuspended(self);
+    }
+
+    /// Resume the task
+    pub fn resumeMe(self: *Self) Error!void {
+        if (!self._init) return OsCore.Error.Uninitialized;
+        task_control.addReady(self);
+    }
 };
 
 pub const State = enum { running, ready, suspended, yeilded, blocked, blocked_timedout, exited };
-
-pub const TaskConfig = struct {
-    /// Task name
-    name: []const u8,
-    /// Task stack
-    stack: []u32,
-    /// Function executed by task
-    subroutine: *const fn () anyerror!void,
-    /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
-    /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
-    subroutineErrHandler: ?*const fn (err: anyerror) void = null,
-    ///Priority level of the task.  Lower number = higher priority.
-    priority: u5,
-};
 
 pub var task_control: TaskControl = .{};
 
