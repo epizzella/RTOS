@@ -15,14 +15,14 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const OsCore = @import("source/os_core.zig");
-const OsTask = @import("source/os_task.zig");
+const OsTask = @import("source/task.zig");
 const ArchInterface = @import("source/arch/arch_interface.zig");
 
 var arch = ArchInterface.arch;
 
 pub const Task = OsTask.Task;
 pub const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
-pub const Mutex = @import("source/synchronization/os_mutex.zig");
+pub const Mutex = @import("source/synchronization/mutex.zig").Mutex;
 pub const EventGroup = @import("source/synchronization/event_group.zig");
 pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
@@ -40,7 +40,9 @@ pub fn create_task(config: OsTask.TaskConfig) Task {
 
 export var g_stack_offset: u32 = 0x08;
 
-///The operating system will begin multitasking.  This function never returns.
+/// The operating system will begin multitasking.  This function should only be
+/// called once.  Subsequent calls have no effect.  The frist time this function
+/// is called it will not return as multitasking started.
 pub fn startOS(comptime config: OsConfig) void {
     if (OsCore.isOsStarted() == false) {
         comptime {
@@ -77,7 +79,7 @@ pub fn startOS(comptime config: OsConfig) void {
     }
 }
 
-///Put the active task to sleep.  It will become ready to run again after `time_ms` milliseconds.
+/// Put the active task to sleep.  It will become ready to run again after `time_ms` milliseconds.
 pub fn delay(time_ms: u32) OsCore.Error!void {
     var running_task = try OsCore.validateCallMajor();
     const timeout: u32 = (time_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
@@ -86,4 +88,17 @@ pub fn delay(time_ms: u32) OsCore.Error!void {
     running_task._timeout = timeout;
     arch.criticalEnd();
     arch.runScheduler();
+}
+
+const SleepTime = struct {
+    time_ms: usize = 0,
+    time_sec: usize = 0,
+    time_min: usize = 0,
+    time_hr: usize = 0,
+    time_days: usize = 0,
+};
+
+/// Put the active task to sleep.  The value of time cannot exceed 2^32 milliseconds (~49.7 days)
+pub fn sleep(time: SleepTime) OsCore.Error!void {
+    _ = time;
 }

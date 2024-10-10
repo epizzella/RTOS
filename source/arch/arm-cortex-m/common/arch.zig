@@ -14,7 +14,7 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const OsTask = @import("../../../os_task.zig");
+const OsTask = @import("../../../task.zig");
 const OsCore = @import("../../../os_core.zig");
 
 const task_ctrl = &OsTask.task_control;

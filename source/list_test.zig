@@ -16,7 +16,7 @@
 
 const std = @import("std");
 const TaskQueue = @import("util/task_queue.zig");
-const Task = @import("os_task.zig");
+const Task = @import("task.zig");
 const os = @import("os.zig");
 const print = std.debug.print;
 

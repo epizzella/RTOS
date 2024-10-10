@@ -53,7 +53,7 @@ pub const Task = struct {
         };
     }
 
-    pub fn initalize(self: *Self) void {
+    pub fn init(self: *Self) void {
         if (!self._init) {
             task_control.addReady(self);
             self._init = true;

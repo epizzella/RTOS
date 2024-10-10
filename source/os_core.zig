@@ -14,8 +14,8 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const OsTask = @import("os_task.zig");
-const Mutex = @import("synchronization/os_mutex.zig");
+const OsTask = @import("task.zig");
+const Mutex = @import("synchronization/mutex.zig");
 const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 pub const Task = OsTask.Task;
@@ -75,21 +75,6 @@ pub fn schedule() void {
     }
 }
 
-///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
-pub inline fn systemTick() void {
-    if (os_config.sysTick_callback) |callback| {
-        callback();
-    }
-
-    if (os_started) {
-        Mutex.Control.updateTimeOut();
-        EventGroup.Control.updateTimeOut();
-        task_ctrl.updateTasksDelay();
-        task_ctrl.cycleActive();
-        schedule();
-    }
-}
-
 pub fn validateCallMajor() Error!*Task {
     if (!os_started) return Error.OsOffline;
     const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
@@ -121,9 +106,33 @@ pub const SyncContext = struct {
     };
 };
 
-pub const MutexContext = struct {
-    aborted: bool = false,
-};
+var ticks: u64 = 0;
+
+/// Get the current number of elapsed ticks
+pub fn getTicks() u64 {
+    return ticks;
+}
+
+/// Get the current number of elapsed ticks as milliseconds (rounded down)
+pub fn getTicksMs() u64 {
+    return (ticks * 1000) / os_config.system_clock_freq_hz;
+}
+
+///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
+pub inline fn systemTick() void {
+    if (os_config.sysTick_callback) |callback| {
+        callback();
+    }
+
+    if (os_started) {
+        ticks +%= 1;
+        Mutex.Control.updateTimeOut();
+        EventGroup.Control.updateTimeOut();
+        task_ctrl.updateTasksDelay();
+        task_ctrl.cycleActive();
+        schedule();
+    }
+}
 
 pub const Error = error{
     /// The running task is null.  This is an illegal state once multi tasking as started.

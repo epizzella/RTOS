@@ -16,7 +16,7 @@
 
 const ARMv7M = @import("arm-cortex-m/common/arch.zig");
 const TestArch = @import("test/test_arch.zig");
-const Task = @import("../os_task.zig").Task;
+const Task = @import("../task.zig").Task;
 const builtin = @import("builtin");
 const std = @import("std");
 const cpu = std.Target.arm.cpu;

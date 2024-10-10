@@ -15,7 +15,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const std = @import("std");
-const OsTask = @import("../os_task.zig");
+const OsTask = @import("../task.zig");
 const task_control = &OsTask.task_control;
 
 pub fn getSyncControl(T: type) type {
