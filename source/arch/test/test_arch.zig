@@ -14,7 +14,7 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const Task = @import("../../os_task.zig").Task;
+const Task = @import("../../task.zig").Task;
 const Self = @This();
 
 pub fn coreInit(self: *Self) void {

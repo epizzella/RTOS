@@ -15,51 +15,79 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const std = @import("std");
-const OsTask = @import("../os_task.zig");
+const OsTask = @import("../task.zig");
+const OsCore = @import("../os_core.zig");
+const ArchInterface = @import("../arch/arch_interface.zig");
 
-pub fn getSyncControl(T: type) type {
-    comptime {
-        const info = @typeInfo(T);
-        if ((info != .Struct)) @compileError("T must be Struct");
-        //checking that _next is a *T should work in zig v.014
-        //const field_info = std.meta.fieldInfo(T, ._next);
-        //if (field_info != *T) @compileError("_next is not type *T");
+const Error = OsCore.Error;
+const task_control = &OsTask.task_control;
+const Task = OsTask.Task;
+const TaskQueue = OsTask.TaskQueue;
+var arch = ArchInterface.arch;
+
+pub const SyncContex = struct {
+    _next: ?*SyncContex = null,
+    _pending: TaskQueue = .{},
+    _init: bool = false,
+};
+
+pub const SyncControl = struct {
+    const Self = @This();
+    var list: ?*SyncContex = null;
+
+    pub fn add(new: *SyncContex) void {
+        new._next = list;
+        list = new;
+        new._init = true;
     }
 
-    return struct {
-        var list: ?*T = null;
+    /// Update the timeout of all the task pending on the synchronization object
+    pub fn updateTimeOut() void {
+        var syncObj = list orelse return;
+        while (true) {
+            if (syncObj._pending.head) |head| {
+                var task = head;
+                while (true) {
+                    if (task._timeout > 0) {
+                        task._timeout -= 1;
+                        if (task._timeout == 0) task._SyncContext.timed_out = true;
+                        task_control.readyTask(task);
+                    }
 
-        pub fn add(new: *T) void {
-            new._next = list;
-            list = new;
-            new._init = true;
-        }
-
-        pub fn updateTimeOut() void {
-            var syncObj = list orelse return;
-            while (true) {
-                if (syncObj._pending.head) |head| {
-                    var task = head;
-                    while (true) {
-                        if (task._timeout > 0) {
-                            task._timeout -= 1;
-                            if (task._timeout == 0) task._SyncContext.timed_out = true;
-                        }
-
-                        if (task._to_tail) |next| {
-                            task = next;
-                        } else {
-                            break;
-                        }
+                    if (task._to_tail) |next| {
+                        task = next;
+                    } else {
+                        break;
                     }
                 }
+            }
 
-                if (syncObj._next) |next| {
-                    syncObj = next;
-                } else {
-                    break;
-                }
+            if (syncObj._next) |next| {
+                syncObj = next;
+            } else {
+                break;
             }
         }
-    };
-}
+    }
+
+    pub fn blockTask(blocker: *SyncContex, timeout_ms: u32) !void {
+        if (task_control.popActive()) |task| {
+            blocker._pending.insertSorted(task);
+            task._timeout = (timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
+            task._state = OsTask.State.blocked;
+            arch.criticalEnd();
+            arch.runScheduler();
+
+            if (task._SyncContext.timed_out) {
+                task._SyncContext.timed_out = false;
+                return Error.TimedOut;
+            }
+            if (task._SyncContext.aborted) {
+                task._SyncContext.aborted = false;
+                return Error.Aborted;
+            }
+        } else {
+            return Error.RunningTaskNull;
+        }
+    }
+};

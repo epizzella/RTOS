@@ -6,15 +6,23 @@ A Real Time Operating System written in Zig
 
 - [X] Priority based scheduling
 - [X] 32 priority levels for user tasks plus 1 resevered priority level (lowest prioirty) for the idle task
+  - [X] Callback function for idle task
 - [X] Unlimited tasks per priority level
+- [X] Tasks return anyerror!void.  Users have the option to provide an error handler callback. 
 - [X] Mutexes
   - [ ] Priority Inheritance
-- [ ] Semaphores
+  - [ ] Unit Tests
+- [X] Semaphores
+  - [ ] Priority Inheritance
+  - [ ] Unit Tests
 - [X] Event Groups
-- [ ] Messages Queues
+  - [ ] Unit Tests
+- [X] Messages Queues
+  - [ ] Unit Tests
 - [ ] Software Timers
-- [ ] Error System
+  - [ ] Unit Tests
 - [ ] Debug information / Debug task
+  - [ ] Unit Tests
 
 ## Supported Architectures
 

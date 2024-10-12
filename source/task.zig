@@ -20,8 +20,11 @@ const ArchInterface = @import("arch/arch_interface.zig");
 var arch = ArchInterface.arch;
 const os_config = &OsCore.getOsConfig;
 const SyncContext = OsCore.SyncContext;
+const Error = OsCore.Error;
 
 pub const Task = struct {
+    const Self = @This();
+
     _stack: []u32,
     _stack_ptr: usize,
     _state: State = State.ready,
@@ -38,8 +41,21 @@ pub const Task = struct {
     _init: bool = false,
     _name: []const u8,
 
-    const Self = @This();
+    pub const TaskConfig = struct {
+        /// Task name
+        name: []const u8,
+        /// Task stack
+        stack: []u32,
+        /// Function executed by task
+        subroutine: *const fn () anyerror!void,
+        /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
+        /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
+        subroutineErrHandler: ?*const fn (err: anyerror) void = null,
+        ///Priority level of the task.  Lower number = higher priority.
+        priority: u5,
+    };
 
+    /// Create a task
     pub fn create_task(config: TaskConfig) Task {
         return Task{
             ._name = config.name,
@@ -53,29 +69,28 @@ pub const Task = struct {
         };
     }
 
-    pub fn initalize(self: *Self) void {
+    /// Add task to the OS
+    pub fn init(self: *Self) void {
         if (!self._init) {
             task_control.addReady(self);
             self._init = true;
         }
     }
+
+    /// Suspend the task
+    pub fn suspendMe(self: *Self) Error!void {
+        if (!self._init) return OsCore.Error.Uninitialized;
+        task_control.addSuspended(self);
+    }
+
+    /// Resume the task
+    pub fn resumeMe(self: *Self) Error!void {
+        if (!self._init) return OsCore.Error.Uninitialized;
+        task_control.addReady(self);
+    }
 };
 
 pub const State = enum { running, ready, suspended, yeilded, blocked, blocked_timedout, exited };
-
-pub const TaskConfig = struct {
-    /// Task name
-    name: []const u8,
-    /// Task stack
-    stack: []u32,
-    /// Function executed by task
-    subroutine: *const fn () anyerror!void,
-    /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
-    /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
-    subroutineErrHandler: ?*const fn (err: anyerror) void = null,
-    ///Priority level of the task.  Lower number = higher priority.
-    priority: u5,
-};
 
 pub var task_control: TaskControl = .{};
 
@@ -94,6 +109,7 @@ pub const TaskControl = struct {
     export var current_task: ?*volatile Task = null;
     export var next_task: *volatile Task = undefined;
 
+    ///Initalize the stacks for every task added to the OS
     pub fn initAllStacks(self: *TaskControl) void {
         if (!OsCore.isOsStarted()) {
             for (&self.table) |*row| {
@@ -117,13 +133,13 @@ pub const TaskControl = struct {
         self.ready_mask |= ONE << (priorityAdjust[priority]);
     }
 
+    ///Set task ready to run
     pub fn readyTask(self: *TaskControl, task: *Task) void {
-        if (task._queue) |q| {
-            _ = q.remove(task);
-        }
+        if (task._queue) |q| _ = q.remove(task);
         self.addReady(task);
     }
 
+    ///Set task as yeilded
     pub fn yeildTask(self: *TaskControl, task: *Task) void {
         if (task._queue) |q| _ = q.remove(task);
         if (self.table[task._priority].ready_tasks.head == null) {
@@ -132,6 +148,7 @@ pub const TaskControl = struct {
         self.addYeilded(task);
     }
 
+    ///Set task as suspended
     pub fn suspendTask(self: *TaskControl, task: *Task) void {
         if (task._queue) |q| _ = q.remove(task);
         if (self.table[task._priority].ready_tasks.head == null) {
@@ -141,7 +158,7 @@ pub const TaskControl = struct {
     }
 
     ///Add task to the active task queue
-    pub fn addReady(self: *TaskControl, task: *Task) void {
+    fn addReady(self: *TaskControl, task: *Task) void {
         self.table[task._priority].ready_tasks.insertAfter(task, null);
         self.setReadyBit(task._priority);
         task._state = State.ready;
@@ -149,13 +166,13 @@ pub const TaskControl = struct {
     }
 
     ///Add task to the yielded task queue
-    pub fn addYeilded(self: *TaskControl, task: *Task) void {
+    fn addYeilded(self: *TaskControl, task: *Task) void {
         self.table[task._priority].yielded_tasks.insertAfter(task, null);
         task._state = State.yeilded;
     }
 
     ///Add task to the suspended task queue
-    pub fn addSuspended(self: *TaskControl, task: *Task) void {
+    fn addSuspended(self: *TaskControl, task: *Task) void {
         self.table[task._priority].suspended_tasks.insertAfter(task, null);
         if (task._state != State.exited) task._state = State.suspended;
     }
@@ -178,7 +195,7 @@ pub const TaskControl = struct {
     }
 
     ///Set `next_task` to the highest priority task that is ready to run
-    pub fn readyNextTask(self: *TaskControl) void {
+    pub fn setNextRunningTask(self: *TaskControl) void {
         self.running_priority = @clz(self.ready_mask);
         next_task = self.table[self.running_priority].ready_tasks.head.?;
         next_task._state = State.running;
