@@ -25,7 +25,8 @@ var arch = ArchInterface.arch;
 const task_control = &OsTask.task_control;
 const os_config = &OsCore.getOsConfig;
 const Error = OsCore.Error;
-pub const Control = SyncControl.getSyncControl(Mutex);
+pub const Control = SyncControl.SyncControl;
+const SyncContex = SyncControl.SyncContex;
 
 pub const Mutex = struct {
     const Self = @This();
@@ -33,15 +34,21 @@ pub const Mutex = struct {
 
     _name: []const u8,
     _owner: ?*OsTask.Task = null,
-    _pending: TaskQueue = .{},
-    _next: ?*Self = null,
-    _init: bool = false,
+    _syncContext: SyncContex = .{},
 
     /// Create a mutex object
     pub fn create_mutex(comptime name: []const u8) Self {
         return Self{
             ._name = name,
         };
+    }
+
+    /// Add the semaphore to the OS
+    pub fn init(self: *Self) void {
+        if (!self._syncContext._init) {
+            Control.add(&self._syncContext);
+            self._syncContext._init = true;
+        }
     }
 
     pub const AquireOptions = struct {
@@ -60,15 +67,11 @@ pub const Mutex = struct {
         arch.criticalStart();
         defer arch.criticalEnd();
 
-        if (self._init == false) {
-            Control.add(self);
-        }
-
         if (self._owner) |owner| {
             //locked
             _ = owner; //TODO: add priority inheritance check
 
-            try Control.blockTask(self, options.timeout_ms);
+            try Control.blockTask(&self._syncContext, options.timeout_ms);
         } else {
             //unlocked
             self._owner = running_task;
@@ -84,7 +87,7 @@ pub const Mutex = struct {
         const active_task = try OsCore.validateCallMajor();
 
         if (active_task == self._owner) {
-            self._owner = self._pending.head;
+            self._owner = self._syncContext._pending.head;
             if (self._owner) |head| {
                 task_control.readyTask(head);
                 if (head._priority < task_control.running_priority) {
@@ -102,7 +105,7 @@ pub const Mutex = struct {
     /// * task - The task to abort & ready
     pub fn abortAcquire(self: *Self, task: OsTask) Error!void {
         const running_task = try OsCore.validateCallMinor();
-        if (!self._init) return Error.Uninitialized;
+        if (!self._syncContext._init) return Error.Uninitialized;
 
         arch.criticalStart();
         defer arch.criticalEnd();

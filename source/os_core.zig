@@ -19,6 +19,8 @@ const Mutex = @import("synchronization/mutex.zig");
 const Semaphore = @import("synchronization/semaphore.zig");
 const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
+const SyncControl = @import("synchronization/sync_control.zig");
+
 pub const Task = OsTask.Task;
 
 var arch = ArchInterface.arch;
@@ -75,6 +77,7 @@ pub fn schedule() void {
     }
 }
 
+//TODO: Move the validateCall functions into SyncControl & add checks for init
 pub fn validateCallMajor() Error!*Task {
     if (!os_started) return Error.OsOffline;
     const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
@@ -172,9 +175,7 @@ pub inline fn systemTick() void {
 
     if (os_started) {
         ticks +%= 1;
-        Mutex.Control.updateTimeOut();
-        Semaphore.Control.updateTimeOut();
-        EventGroup.Control.updateTimeOut();
+        SyncControl.SyncControl.updateTimeOut();
         task_ctrl.updateTasksDelay();
         task_ctrl.cycleActive();
         schedule();

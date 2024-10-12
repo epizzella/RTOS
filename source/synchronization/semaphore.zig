@@ -26,14 +26,14 @@ const task_control = &OsTask.task_control;
 const os_config = &OsCore.getOsConfig;
 const Error = OsCore.Error;
 
-pub const Control = SyncControl.getSyncControl(SyncContex);
+pub const Control = SyncControl.SyncControl;
 const SyncContex = SyncControl.SyncContex;
 
 pub const Semaphore = struct {
     const Self = @This();
     _name: []const u8,
     _count: usize,
-    _syncContex: SyncContex,
+    _syncContext: SyncContex,
 
     pub const CreateOptions = struct {
         /// Name of sempahore
@@ -47,15 +47,15 @@ pub const Semaphore = struct {
         return Self{
             ._name = options.name,
             ._count = options.inital_value,
-            ._syncContex = .{},
+            ._syncContext = .{},
         };
     }
 
     /// Add the semaphore to the OS
     pub fn init(self: *Self) void {
-        if (!self._syncContex._init) {
-            Control.add(&self._syncContex);
-            self._syncContex._init = true;
+        if (!self._syncContext._init) {
+            Control.add(&self._syncContext);
+            self._syncContext._init = true;
         }
     }
 
@@ -72,13 +72,13 @@ pub const Semaphore = struct {
     /// interrupt.
     pub fn acquire(self: *Self, options: AquireOptions) Error!void {
         _ = try OsCore.validateCallMajor();
-        if (!self._syncContex._init) return Error.Uninitialized;
+        if (!self._syncContext._init) return Error.Uninitialized;
         arch.criticalStart();
         defer arch.criticalEnd();
 
         if (self._count == 0) {
             //locked
-            try Control.blockTask(&self._syncContex, options.timeout_ms);
+            try Control.blockTask(&self._syncContext, options.timeout_ms);
         } else {
             //unlocked
             self._count -= 1;
@@ -92,7 +92,7 @@ pub const Semaphore = struct {
         defer arch.criticalEnd();
         const active_task = try OsCore.validateCallMajor();
 
-        if (self._syncContex._pending.head) |head| {
+        if (self._syncContext._pending.head) |head| {
             task_control.readyTask(head);
             if (head._priority < active_task._priority) {
                 arch.criticalEnd();
@@ -107,7 +107,7 @@ pub const Semaphore = struct {
     /// runs acquire() will return OsError.Aborted
     pub fn abortAcquire(self: *Self, task: OsTask) Error!void {
         const running_task = try OsCore.validateCallMinor();
-        if (!self._syncContex._init) return Error.Uninitialized;
+        if (!self._syncContext._init) return Error.Uninitialized;
 
         arch.criticalStart();
         defer arch.criticalEnd();

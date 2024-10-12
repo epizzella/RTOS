@@ -23,7 +23,8 @@ const ArchInterface = @import("../arch/arch_interface.zig");
 var arch = ArchInterface.arch;
 const Error = OsCore.Error;
 const task_control = &OsTask.task_control;
-pub const Control = SyncControl.getSyncControl(EventGroup);
+pub const Control = SyncControl.SyncControl;
+const SyncContex = SyncControl.SyncContex;
 
 pub const EventGroup = struct {
     const Self = @This();
@@ -31,9 +32,7 @@ pub const EventGroup = struct {
 
     _name: []const u8,
     _event: usize,
-    _pending: TaskQueue,
-    _next: ?*Self,
-    _init: bool = false,
+    _syncContex: SyncContex,
 
     pub const EventTrigger = OsCore.SyncContext.EventTrigger;
 
@@ -47,16 +46,15 @@ pub const EventGroup = struct {
         return Self{
             ._name = config.name,
             ._event = 0,
-            ._pending = .{},
-            ._next = null,
+            ._syncContex = .{},
         };
     }
 
     /// Add the event group to the OS
     pub fn init(self: *Self) void {
-        if (!self._init) {
-            Control.add(self);
-            self._init = true;
+        if (!self._syncContex._init) {
+            Control.add(&self._syncContex);
+            self._syncContex._init = true;
         }
     }
 
@@ -68,12 +66,12 @@ pub const EventGroup = struct {
     /// Set the event flag of an event group
     pub fn writeEvent(self: *Self, options: writeOptions) Error!void {
         const running_task = try OsCore.validateCallMinor();
-        if (!self._init) return Error.Uninitialized;
+        if (!self._syncContex._init) return Error.Uninitialized;
 
         arch.criticalStart();
         defer arch.criticalEnd();
         self._event = options.event;
-        var pending_task = self._pending.head;
+        var pending_task = self._syncContex._pending.head;
         var highest_pending_prio: usize = OsTask.IDLE_PRIORITY_LEVEL;
         while (true) {
             if (pending_task) |task| {
@@ -99,7 +97,7 @@ pub const EventGroup = struct {
 
     /// Read the event flag from the event group
     pub fn readEvent(self: *Self) Error!usize {
-        if (!self._init) return Error.Uninitialized;
+        if (!self._syncContex._init) return Error.Uninitialized;
         return self._event;
     }
 
@@ -116,7 +114,7 @@ pub const EventGroup = struct {
     /// is set when awaitEvent is called the running task will not be blocked.
     pub fn awaitEvent(self: *Self, options: AwaitEventOptions) Error!usize {
         const running_task = try OsCore.validateCallMajor();
-        if (!self._init) return Error.Uninitialized;
+        if (!self._syncContex._init) return Error.Uninitialized;
 
         running_task._SyncContext.pending_event = options.event_mask;
         running_task._SyncContext.trigger_type = options.PendOn;
@@ -128,7 +126,7 @@ pub const EventGroup = struct {
         if (event_triggered) {
             running_task._SyncContext.triggering_event = self._event;
         } else {
-            try Control.blockTask(self, options.timeout_ms);
+            try Control.blockTask(&self._syncContex, options.timeout_ms);
         }
 
         return running_task._SyncContext.triggering_event;
