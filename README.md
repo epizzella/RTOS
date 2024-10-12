@@ -17,7 +17,7 @@ A Real Time Operating System written in Zig
   - [ ] Unit Tests
 - [X] Event Groups
   - [ ] Unit Tests
-- [ ] Messages Queues
+- [X] Messages Queues
   - [ ] Unit Tests
 - [ ] Software Timers
   - [ ] Unit Tests
