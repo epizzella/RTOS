@@ -68,23 +68,7 @@ pub const Mutex = struct {
             //locked
             _ = owner; //TODO: add priority inheritance check
 
-            if (task_control.popActive()) |task| {
-                self._pending.insertSorted(task);
-                task._timeout = (options.timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
-                task._state = OsTask.State.blocked;
-                arch.criticalEnd();
-                arch.runScheduler();
-                if (task._SyncContext.timed_out) {
-                    task._SyncContext.timed_out = false;
-                    return Error.TimedOut;
-                }
-                if (task._SyncContext.aborted) {
-                    task._SyncContext.aborted = false;
-                    return Error.Aborted;
-                }
-            } else {
-                return Error.RunningTaskNull;
-            }
+            try Control.blockTask(self, options.timeout_ms);
         } else {
             //unlocked
             self._owner = running_task;

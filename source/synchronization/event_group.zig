@@ -25,7 +25,7 @@ const Error = OsCore.Error;
 const task_control = &OsTask.task_control;
 pub const Control = SyncControl.getSyncControl(EventGroup);
 
-const EventGroup = struct {
+pub const EventGroup = struct {
     const Self = @This();
     const EventContext = OsCore.SyncContext;
 
@@ -53,7 +53,7 @@ const EventGroup = struct {
     }
 
     /// Add the event group to the OS
-    pub fn initalize(self: *Self) void {
+    pub fn init(self: *Self) void {
         if (!self._init) {
             Control.add(self);
             self._init = true;
@@ -103,7 +103,7 @@ const EventGroup = struct {
         return self._event;
     }
 
-    pub const PendEventOptions = struct {
+    pub const AwaitEventOptions = struct {
         /// The event bits to pend on
         event_mask: usize,
         /// The state change of the event bits to pend on
@@ -113,8 +113,8 @@ const EventGroup = struct {
     };
 
     /// Block the running task until the pending event is set.  If the pending event
-    /// is set when pendEvent is called the running task will not be blocked.
-    pub fn pendEvent(self: *Self, options: PendEventOptions) Error!usize {
+    /// is set when awaitEvent is called the running task will not be blocked.
+    pub fn awaitEvent(self: *Self, options: AwaitEventOptions) Error!usize {
         const running_task = try OsCore.validateCallMajor();
         if (!self._init) return Error.Uninitialized;
 
@@ -128,23 +128,7 @@ const EventGroup = struct {
         if (event_triggered) {
             running_task._SyncContext.triggering_event = self._event;
         } else {
-            if (task_control.popActive()) |task| {
-                self._pending.insertAfter(task, null);
-                task._timeout = (options.timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
-                task._state = OsTask.State.blocked;
-                arch.criticalEnd();
-                arch.runScheduler();
-                if (task._SyncContext.timed_out) {
-                    task._SyncContext.timed_out = false;
-                    return Error.TimedOut;
-                }
-                if (task._SyncContext.aborted) {
-                    task._SyncContext.aborted = false;
-                    return Error.Aborted;
-                }
-            } else {
-                return Error.RunningTaskNull;
-            }
+            try Control.blockTask(self, options.timeout_ms);
         }
 
         return running_task._SyncContext.triggering_event;
@@ -165,8 +149,8 @@ const EventGroup = struct {
     };
 
     /// Readys the task if it is waiting on the event group.  When the task next
-    /// runs pendEvent() will return OsError.Aborted
-    pub fn abortPend(self: *Self, options: AbortOptions) Error!void {
+    /// runs awaitEvent() will return OsError.Aborted
+    pub fn abortAwait(self: *Self, options: AbortOptions) Error!void {
         const running_task = try OsCore.validateCallMinor();
         if (!self._init) return Error.Uninitialized;
 
