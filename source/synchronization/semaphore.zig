@@ -28,7 +28,7 @@ const Task = OsTask.Task;
 const Error = OsCore.Error;
 
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const Semaphore = struct {
     const Self = @This();

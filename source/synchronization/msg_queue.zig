@@ -24,7 +24,7 @@ const task_control = &OsTask.task_control;
 var arch = ArchInterface.arch;
 
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 const QError = error{ QueueFull, QueueEmpty };
 const OsError = OsCore.Error;
 const Error = QError || OsError;

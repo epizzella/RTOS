@@ -25,18 +25,18 @@ const Task = OsTask.Task;
 const TaskQueue = OsTask.TaskQueue;
 var arch = ArchInterface.arch;
 
-pub const SyncContex = struct {
-    _next: ?*SyncContex = null,
-    _prev: ?*SyncContex = null,
+pub const SyncContext = struct {
+    _next: ?*SyncContext = null,
+    _prev: ?*SyncContext = null,
     _pending: TaskQueue = .{},
     _init: bool = false,
 };
 
 pub const SyncControl = struct {
     const Self = @This();
-    var list: ?*SyncContex = null;
+    var list: ?*SyncContext = null;
 
-    pub fn add(new: *SyncContex) void {
+    pub fn add(new: *SyncContext) void {
         new._next = list;
         if (list) |l| {
             l._prev = new;
@@ -45,7 +45,7 @@ pub const SyncControl = struct {
         new._init = true;
     }
 
-    pub fn remove(detach: *SyncContex) Error!void {
+    pub fn remove(detach: *SyncContext) Error!void {
         if (!detach._init) return Error.Uninitialized;
         if (detach._pending.head != null) return Error.TaskPendingOnSync;
 
@@ -95,7 +95,7 @@ pub const SyncControl = struct {
         }
     }
 
-    pub fn blockTask(blocker: *SyncContex, timeout_ms: u32) !void {
+    pub fn blockTask(blocker: *SyncContext, timeout_ms: u32) !void {
         if (task_control.popActive()) |task| {
             blocker._pending.insertSorted(task);
             task._timeout = (timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
@@ -116,7 +116,7 @@ pub const SyncControl = struct {
         }
     }
 
-    pub fn abort(blocker: *SyncContex, task: *Task) Error!void {
+    pub fn abort(blocker: *SyncContext, task: *Task) Error!void {
         const running_task = try OsCore.validateCallMinor();
         if (!blocker._init) return Error.Uninitialized;
         const q = task._queue orelse return Error.TaskNotBlockedBySync;

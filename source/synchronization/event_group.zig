@@ -24,7 +24,7 @@ var arch = ArchInterface.arch;
 const Error = OsCore.Error;
 const task_control = &OsTask.task_control;
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const EventGroup = struct {
     const Self = @This();

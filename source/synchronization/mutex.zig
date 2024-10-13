@@ -27,7 +27,7 @@ const Task = OsTask.Task;
 const os_config = &OsCore.getOsConfig;
 const Error = OsCore.Error;
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const Mutex = struct {
     const Self = @This();

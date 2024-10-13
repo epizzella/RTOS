@@ -8,31 +8,47 @@ const OS = @import("os.zig");
 const expect = std.testing.expect;
 const task_control = &OsTask.task_control;
 const Task = OsTask.Task;
+const TaskQueue = OsTask.TaskQueue;
 
 var test_stack: [20]u32 = [_]u32{0xDEADC0DE} ** 20;
 fn test_fn() !void {}
+
 var test_task1 = Task.create_task(.{
-    .name = "test",
+    .name = "test1",
     .priority = 1,
     .stack = &test_stack,
     .subroutine = &test_fn,
 });
 
 var test_task2 = Task.create_task(.{
-    .name = "test",
+    .name = "test2",
     .priority = 2,
     .stack = &test_stack,
     .subroutine = &test_fn,
 });
 
-var idle_task = Task.create_task(.{
-    .name = "idle task",
-    .priority = 0, //Idle task priority is ignored
+var test_task3: Task = Task.create_task(.{
+    .name = "test3",
+    .priority = 3,
     .stack = &test_stack,
     .subroutine = &test_fn,
 });
 
-fn setup() void {
+var test_task4 = Task.create_task(.{
+    .name = "test4",
+    .priority = 4,
+    .stack = &test_stack,
+    .subroutine = &test_fn,
+});
+
+var idle_task = Task.create_task(.{
+    .name = "idle_task",
+    .priority = 0, //ignored
+    .stack = &test_stack,
+    .subroutine = &test_fn,
+});
+
+fn task_setup() void {
     test_task1.init();
     test_task1.init();
     task_control.readyTask(&test_task1);
@@ -47,10 +63,315 @@ fn setup() void {
 }
 
 /////////////////////////////////////////////
+//         Task Queue Unit Tests          //
+///////////////////////////////////////////
+
+fn clearPointers() void {
+    test_task1._to_head = null;
+    test_task1._to_tail = null;
+    test_task2._to_head = null;
+    test_task2._to_tail = null;
+    test_task3._to_head = null;
+    test_task3._to_tail = null;
+    test_task4._to_head = null;
+    test_task4._to_tail = null;
+}
+
+test "Task Queue Insert After Append 1 Node" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertAfter(&test_task1, null);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task1);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == null);
+}
+
+test "Task Queue Insert After Append 2 Nodes" {
+    //clear pointers
+    clearPointers();
+    var queue: TaskQueue = .{};
+    queue.insertAfter(&test_task1, null);
+    queue.insertAfter(&test_task2, &test_task1);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task2);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == null);
+}
+
+test "Task Queue Insert After Append 3 Nodes" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertAfter(&test_task1, null);
+    queue.insertAfter(&test_task2, null);
+    queue.insertAfter(&test_task3, null);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task3);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == null);
+}
+
+test "Task Queue Insert After 4 Nodes" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertAfter(&test_task1, null);
+    queue.insertAfter(&test_task2, null);
+    queue.insertAfter(&test_task3, null);
+    queue.insertAfter(&test_task4, &test_task2);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task3);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task2);
+    try expect(test_task4._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task4);
+    try expect(test_task3._to_tail == null);
+}
+
+test "Task Queue Insert Before Prepend 1 node" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertBefore(&test_task1, null);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task1);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == null);
+}
+
+test "Task Queue Insert Before 2 nodes" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertBefore(&test_task1, null);
+    queue.insertBefore(&test_task2, &test_task1);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task2);
+    try expect(queue.tail == &test_task1);
+    try expect(test_task2._to_head == null);
+    try expect(test_task2._to_tail == &test_task1);
+    try expect(test_task1._to_head == &test_task2);
+    try expect(test_task1._to_tail == null);
+}
+
+test "Task Queue Insert Before Prepend 3 Nodes" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertBefore(&test_task3, null);
+    queue.insertBefore(&test_task2, null);
+    queue.insertBefore(&test_task1, null);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task3);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == null);
+}
+
+test "Task Queue Insert Before 4 nodes" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertBefore(&test_task3, null);
+    queue.insertBefore(&test_task2, null);
+    queue.insertBefore(&test_task1, null);
+    queue.insertBefore(&test_task4, &test_task2);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task3);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task1);
+    try expect(test_task4._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task4);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == null);
+}
+
+test "Task Queue Insert Sorted 1 node" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertSorted(&test_task1);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task1);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == null);
+}
+
+test "Task Queue Insert Mixed" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+
+    queue.insertBefore(&test_task3, null);
+    queue.insertAfter(&test_task4, &test_task3);
+    queue.insertBefore(&test_task1, null);
+    queue.insertAfter(&test_task2, &test_task1);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task4);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task3);
+    try expect(test_task4._to_tail == null);
+}
+
+test "Task Queue Insert Sorted 4 Nodes - 1" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertSorted(&test_task1);
+    queue.insertSorted(&test_task2);
+    queue.insertSorted(&test_task3);
+    queue.insertSorted(&test_task4);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task4);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task3);
+    try expect(test_task4._to_tail == null);
+}
+
+test "Task Queue Insert Sorted 4 Nodes - 2" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertSorted(&test_task4);
+    queue.insertSorted(&test_task3);
+    queue.insertSorted(&test_task2);
+    queue.insertSorted(&test_task1);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task4);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task3);
+    try expect(test_task4._to_tail == null);
+}
+
+test "Task Queue Insert Sorted 4 Nodes - 3" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+
+    queue.insertSorted(&test_task3);
+    queue.insertSorted(&test_task4);
+    queue.insertSorted(&test_task1);
+    queue.insertSorted(&test_task2);
+
+    try expect(queue.head.?._to_head == null);
+    try expect(queue.tail.?._to_tail == null);
+    try expect(queue.head == &test_task1);
+    try expect(queue.tail == &test_task4);
+    try expect(test_task1._to_head == null);
+    try expect(test_task1._to_tail == &test_task2);
+    try expect(test_task2._to_head == &test_task1);
+    try expect(test_task2._to_tail == &test_task3);
+    try expect(test_task3._to_head == &test_task2);
+    try expect(test_task3._to_tail == &test_task4);
+    try expect(test_task4._to_head == &test_task3);
+    try expect(test_task4._to_tail == null);
+}
+
+test "Task Queue Pop - 1" {
+    //clear pointers
+    clearPointers();
+
+    var queue: TaskQueue = .{};
+    queue.insertSorted(&test_task1);
+    queue.insertSorted(&test_task2);
+    queue.insertSorted(&test_task3);
+    queue.insertSorted(&test_task4);
+
+    try expect(queue.elements == 4);
+    var head = queue.pop();
+    try expect(head == &test_task1);
+    head = queue.pop();
+    try expect(head == &test_task2);
+    head = queue.pop();
+    try expect(head == &test_task3);
+    head = queue.pop();
+    try expect(head == &test_task4);
+    try expect(queue.elements == 0);
+}
+
+/////////////////////////////////////////////
 //          Semaphore Unit Tests          //
 ///////////////////////////////////////////
 
-test "Semaphore Init/Deinit" {
+test "Semaphore Init/Deinit Test" {
     var semaphore1 = Semaphore.create_semaphore(.{ .name = "test_sem1", .inital_value = 1 });
     var semaphore2 = Semaphore.create_semaphore(.{ .name = "test_sem2", .inital_value = 1 });
     var semaphore3 = Semaphore.create_semaphore(.{ .name = "test_sem3", .inital_value = 1 });
@@ -96,7 +417,7 @@ test "Semaphore Init/Deinit" {
 }
 
 test "Semaphore Aquire Test" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 1 });
     semaphore._syncContext._init = true;
 
@@ -108,7 +429,7 @@ test "Semaphore Aquire Test" {
 }
 
 test "Semaphore Release Test" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     try semaphore.release();
 
@@ -117,7 +438,7 @@ test "Semaphore Release Test" {
 }
 
 test "Semaphore Release Test 2" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
@@ -149,7 +470,7 @@ test "Semaphore Release Test 3" {
 }
 
 test "Semaphore Abort Test" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
@@ -163,7 +484,7 @@ test "Semaphore Abort Test" {
 }
 
 test "Semaphore Abort Test2" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
@@ -173,7 +494,7 @@ test "Semaphore Abort Test2" {
 }
 
 test "Semaphore timeout" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore.init();
 
@@ -189,7 +510,7 @@ test "Semaphore timeout" {
 }
 
 test "Semaphore timeout2" {
-    setup();
+    task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     var semaphore2 = Semaphore.create_semaphore(.{ .name = "test_sem2", .inital_value = 0 });
 
