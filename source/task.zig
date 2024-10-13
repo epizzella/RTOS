@@ -80,13 +80,13 @@ pub const Task = struct {
     /// Suspend the task
     pub fn suspendMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        task_control.addSuspended(self);
+        task_control.suspendTask(self);
     }
 
     /// Resume the task
     pub fn resumeMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        task_control.addReady(self);
+        task_control.readyTask(self);
     }
 };
 

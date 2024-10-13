@@ -90,11 +90,11 @@ pub const Semaphore = struct {
     pub fn release(self: *Self) Error!void {
         arch.criticalStart();
         defer arch.criticalEnd();
-        const active_task = try OsCore.validateCallMajor();
+        const running_task = try OsCore.validateCallMajor();
 
         if (self._syncContext._pending.head) |head| {
             task_control.readyTask(head);
-            if (head._priority < active_task._priority) {
+            if (head._priority < running_task._priority) {
                 arch.criticalEnd();
                 arch.runScheduler();
             }
