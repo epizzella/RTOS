@@ -23,18 +23,18 @@ pub var int_active: bool = false;
 pub var debug_atached: bool = false;
 
 //Test function
-pub fn getScheduler() bool {
+pub fn schedulerRan() bool {
     defer scheduler = false;
     return scheduler;
 }
 
-pub fn getContextSwitch() bool {
+pub fn contextSwitchRan() bool {
     defer contex_switch = false;
     return contex_switch;
 }
 
-pub fn setDebug(active: bool) void {
-    debug_atached = active;
+pub fn setDebug(attached: bool) void {
+    debug_atached = attached;
 }
 
 pub fn setInterruptActive(active: bool) void {

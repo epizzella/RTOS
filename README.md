@@ -13,8 +13,7 @@ A Real Time Operating System written in Zig
   - [ ] Priority Inheritance
   - [ ] Unit Tests
 - [X] Semaphores
-  - [ ] Priority Inheritance
-  - [ ] Unit Tests
+  - [X] Unit Tests
 - [X] Event Groups
   - [ ] Unit Tests
 - [X] Messages Queues

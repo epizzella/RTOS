@@ -127,8 +127,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             return self.popMsg();
         }
 
-        pub fn abortAwaitMsg(self: *Self) Error!void {
-            _ = self;
+        pub fn abortAwaitMsg(self: *Self, task: Task) Error!void {
+            try Control.abort(&self._syncContext, task);
         }
 
         pub fn flush(self: *Self) void {

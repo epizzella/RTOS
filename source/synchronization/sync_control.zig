@@ -27,6 +27,7 @@ var arch = ArchInterface.arch;
 
 pub const SyncContex = struct {
     _next: ?*SyncContex = null,
+    _prev: ?*SyncContex = null,
     _pending: TaskQueue = .{},
     _init: bool = false,
 };
@@ -37,8 +38,32 @@ pub const SyncControl = struct {
 
     pub fn add(new: *SyncContex) void {
         new._next = list;
+        if (list) |l| {
+            l._prev = new;
+        }
         list = new;
         new._init = true;
+    }
+
+    pub fn remove(detach: *SyncContex) Error!void {
+        if (!detach._init) return Error.Uninitialized;
+        if (detach._pending.head != null) return Error.TaskPendingOnSync;
+
+        if (detach._next) |next| {
+            next._prev = detach._prev;
+        }
+
+        if (detach._prev) |prev| {
+            prev._next = detach._next;
+        }
+
+        if (list == detach) {
+            list = null;
+        }
+
+        detach._next = null;
+        detach._prev = null;
+        detach._init = false;
     }
 
     /// Update the timeout of all the task pending on the synchronization object
@@ -88,6 +113,22 @@ pub const SyncControl = struct {
             }
         } else {
             return Error.RunningTaskNull;
+        }
+    }
+
+    pub fn abort(blocker: *SyncContex, task: *Task) Error!void {
+        const running_task = try OsCore.validateCallMinor();
+        if (!blocker._init) return Error.Uninitialized;
+        const q = task._queue orelse return Error.TaskNotBlockedBySync;
+        if (q != &blocker._pending) return Error.TaskNotBlockedBySync;
+
+        arch.criticalStart();
+        defer arch.criticalEnd();
+        task._SyncContext.aborted = true;
+        task_control.readyTask(task);
+        if (task._priority < running_task._priority) {
+            arch.criticalEnd();
+            arch.runScheduler();
         }
     }
 };

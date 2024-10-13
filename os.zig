@@ -17,6 +17,7 @@
 const OsCore = @import("source/os_core.zig");
 const OsTask = @import("source/task.zig");
 const ArchInterface = @import("source/arch/arch_interface.zig");
+const builtin = @import("builtin");
 
 var arch = ArchInterface.arch;
 
@@ -40,7 +41,7 @@ pub fn create_task(config: OsTask.Task.TaskConfig) Task {
     return Task.create_task(config);
 }
 
-export var g_stack_offset: u32 = 0x08;
+export var g_stack_offset: usize = 0x08;
 
 /// The operating system will begin multitasking.  This function should only be
 /// called once.  Subsequent calls have no effect.  The frist time this function
@@ -77,6 +78,6 @@ pub fn startOS(comptime config: OsConfig) void {
             @breakpoint();
         }
 
-        unreachable;
+        if (!builtin.is_test) unreachable;
     }
 }

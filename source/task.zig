@@ -26,7 +26,7 @@ pub const Task = struct {
     const Self = @This();
 
     _stack: []u32,
-    _stack_ptr: usize,
+    _stack_ptr: usize = 0, //updated when os is started
     _state: State = State.ready,
     _queue: ?*TaskQueue = null,
     _subroutine: *const fn () anyerror!void,
@@ -57,6 +57,9 @@ pub const Task = struct {
 
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
+        //TODO: is there anyway to run init() at comptime?  I need to understand when pointers
+        //can an cannot be used at comptime.
+
         return Task{
             ._name = config.name,
             ._stack = config.stack,
@@ -64,8 +67,6 @@ pub const Task = struct {
             ._basePriority = config.priority,
             ._subroutine = config.subroutine,
             ._subroutineErrHandler = config.subroutineErrHandler,
-            ._timeout = 0,
-            ._stack_ptr = 0, //updated when os is started
         };
     }
 
@@ -80,12 +81,14 @@ pub const Task = struct {
     /// Suspend the task
     pub fn suspendMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
+        //TODO: return an error is the task is blocked.
         task_control.suspendTask(self);
     }
 
     /// Resume the task
     pub fn resumeMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
+        //TODO: return an error is the task is not suspended.
         task_control.readyTask(self);
     }
 };
@@ -208,7 +211,7 @@ pub const TaskControl = struct {
     }
 
     ///Updates the delayed time for each sleeping task
-    pub fn updateTasksDelay(self: *TaskControl) void {
+    pub fn updateDelayedTasks(self: *TaskControl) void {
         for (&self.table) |*taskState| {
             if (taskState.yielded_tasks.head) |head| {
                 var task = head;

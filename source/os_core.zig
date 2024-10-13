@@ -19,12 +19,13 @@ const Mutex = @import("synchronization/mutex.zig");
 const Semaphore = @import("synchronization/semaphore.zig");
 const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
-const SyncControl = @import("synchronization/sync_control.zig");
+const OsSyncControl = @import("synchronization/sync_control.zig");
 
 pub const Task = OsTask.Task;
 
 var arch = ArchInterface.arch;
 const task_ctrl = &OsTask.task_control;
+const SyncControl = OsSyncControl.SyncControl;
 
 pub const DEFAULT_IDLE_TASK_SIZE = 17; //TODO: Change this based on the selected arch
 const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
@@ -175,8 +176,8 @@ pub inline fn systemTick() void {
 
     if (os_started) {
         ticks +%= 1;
-        SyncControl.SyncControl.updateTimeOut();
-        task_ctrl.updateTasksDelay();
+        SyncControl.updateTimeOut();
+        task_ctrl.updateDelayedTasks();
         task_ctrl.cycleActive();
         schedule();
     }
@@ -199,8 +200,10 @@ pub const Error = error{
     Aborted,
     /// Os Object not initalized
     Uninitialized,
-    /// The task is not blocked by the OS object
-    ObjectNotBlocking,
+    /// The task is not blocked by the synchonization object
+    TaskNotBlockedBySync,
+    /// The synchonization object cannot be deleted because there is atleast 1 task pending on it.
+    TaskPendingOnSync,
     /// The amount of time specified for the task to sleep exceeds the max value of 2^32 ms
     SleepDurationOutOfRange,
 };
