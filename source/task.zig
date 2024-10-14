@@ -25,7 +25,7 @@ const Error = OsCore.Error;
 pub const Task = struct {
     const Self = @This();
 
-    _stack: []u32,
+    _stack: []usize,
     _stack_ptr: usize = 0, //updated when os is started
     _state: State = State.ready,
     _queue: ?*TaskQueue = null,
@@ -45,7 +45,7 @@ pub const Task = struct {
         /// Task name
         name: []const u8,
         /// Task stack
-        stack: []u32,
+        stack: []usize,
         /// Function executed by task
         subroutine: *const fn () anyerror!void,
         /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
