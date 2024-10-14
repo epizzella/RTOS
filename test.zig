@@ -1,5 +1,6 @@
 const std = @import("std");
 const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
+const Mutex = @import("source/synchronization/mutex.zig").Mutex;
 const OsTask = @import("source/task.zig");
 const TestArch = @import("source/arch/test/test_arch.zig");
 const OsCore = @import("source/os_core.zig");
@@ -50,16 +51,47 @@ var idle_task = Task.create_task(.{
 
 fn task_setup() void {
     test_task1.init();
-    test_task1.init();
+    test_task2.init();
+    test_task3.init();
+    test_task4.init();
     task_control.readyTask(&test_task1);
     task_control.readyTask(&test_task2);
+    task_control.readyTask(&test_task3);
+    task_control.readyTask(&test_task4);
     test_task1._SyncContext.aborted = false;
     test_task2._SyncContext.aborted = false;
+    test_task3._SyncContext.aborted = false;
+    test_task4._SyncContext.aborted = false;
     test_task1._SyncContext.timed_out = false;
     test_task2._SyncContext.timed_out = false;
+    test_task3._SyncContext.timed_out = false;
+    test_task4._SyncContext.timed_out = false;
     task_control.addIdleTask(&idle_task);
     OsCore.setOsStarted();
     task_control.setNextRunningTask();
+    //Clear test arch flags
+    _ = TestArch.schedulerRan();
+    _ = TestArch.contextSwitchRan();
+}
+
+/////////////////////////////////////////////
+//            Task Unit Tests             //
+///////////////////////////////////////////
+
+test "Task Suspend Test" {
+    task_setup();
+    try test_task1.suspendMe();
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+}
+
+test "Task Resume Test" {
+    task_setup();
+    try test_task1.suspendMe();
+    task_control.setNextRunningTask();
+    try test_task1.resumeMe();
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 1);
 }
 
 /////////////////////////////////////////////
@@ -78,7 +110,6 @@ fn clearPointers() void {
 }
 
 test "Task Queue Insert After Append 1 Node" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -93,7 +124,6 @@ test "Task Queue Insert After Append 1 Node" {
 }
 
 test "Task Queue Insert After Append 2 Nodes" {
-    //clear pointers
     clearPointers();
     var queue: TaskQueue = .{};
     queue.insertAfter(&test_task1, null);
@@ -110,7 +140,6 @@ test "Task Queue Insert After Append 2 Nodes" {
 }
 
 test "Task Queue Insert After Append 3 Nodes" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -131,7 +160,6 @@ test "Task Queue Insert After Append 3 Nodes" {
 }
 
 test "Task Queue Insert After 4 Nodes" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -155,7 +183,6 @@ test "Task Queue Insert After 4 Nodes" {
 }
 
 test "Task Queue Insert Before Prepend 1 node" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -170,7 +197,6 @@ test "Task Queue Insert Before Prepend 1 node" {
 }
 
 test "Task Queue Insert Before 2 nodes" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -188,7 +214,6 @@ test "Task Queue Insert Before 2 nodes" {
 }
 
 test "Task Queue Insert Before Prepend 3 Nodes" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -209,7 +234,6 @@ test "Task Queue Insert Before Prepend 3 Nodes" {
 }
 
 test "Task Queue Insert Before 4 nodes" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -233,7 +257,6 @@ test "Task Queue Insert Before 4 nodes" {
 }
 
 test "Task Queue Insert Sorted 1 node" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -248,7 +271,6 @@ test "Task Queue Insert Sorted 1 node" {
 }
 
 test "Task Queue Insert Mixed" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -273,7 +295,6 @@ test "Task Queue Insert Mixed" {
 }
 
 test "Task Queue Insert Sorted 4 Nodes - 1" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -297,7 +318,6 @@ test "Task Queue Insert Sorted 4 Nodes - 1" {
 }
 
 test "Task Queue Insert Sorted 4 Nodes - 2" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -321,7 +341,6 @@ test "Task Queue Insert Sorted 4 Nodes - 2" {
 }
 
 test "Task Queue Insert Sorted 4 Nodes - 3" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -346,7 +365,6 @@ test "Task Queue Insert Sorted 4 Nodes - 3" {
 }
 
 test "Task Queue Pop - 1" {
-    //clear pointers
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -365,6 +383,192 @@ test "Task Queue Pop - 1" {
     head = queue.pop();
     try expect(head == &test_task4);
     try expect(queue.elements == 0);
+}
+
+/////////////////////////////////////////////
+//           Mutex Unit Tests             //
+///////////////////////////////////////////
+
+test "Mutex Init/Deinit Test" {
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    var mutex2 = Mutex.create_mutex("test_mutex1");
+    var mutex3 = Mutex.create_mutex("test_mutex1");
+    //init test
+    mutex1.init();
+    mutex2.init();
+    mutex3.init();
+
+    try expect(mutex1._syncContext._init == true);
+    try expect(mutex1._syncContext._prev == &mutex2._syncContext);
+    try expect(mutex1._syncContext._next == null);
+
+    try expect(mutex2._syncContext._init == true);
+    try expect(mutex2._syncContext._prev == &mutex3._syncContext);
+    try expect(mutex2._syncContext._next == &mutex1._syncContext);
+
+    try expect(mutex3._syncContext._init == true);
+    try expect(mutex3._syncContext._prev == null);
+    try expect(mutex3._syncContext._next == &mutex2._syncContext);
+
+    //deinit test
+    try mutex2.deinit();
+    try expect(mutex2._syncContext._init == false);
+    try expect(mutex2._syncContext._prev == null);
+    try expect(mutex2._syncContext._next == null);
+
+    try expect(mutex3._syncContext._prev == null);
+    try expect(mutex3._syncContext._next == &mutex1._syncContext);
+
+    try expect(mutex1._syncContext._prev == &mutex3._syncContext);
+    try expect(mutex1._syncContext._next == null);
+
+    try mutex3.deinit();
+    try expect(mutex3._syncContext._init == false);
+    try expect(mutex3._syncContext._prev == null);
+    try expect(mutex3._syncContext._next == null);
+
+    try expect(mutex1._syncContext._init == true);
+    try expect(mutex1._syncContext._prev == null);
+    try expect(mutex1._syncContext._next == null);
+
+    try mutex1.deinit();
+}
+
+test "Mutex Aquire Test" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try expect(mutex1.acquire(.{ .timeout_ms = 0 }) == OsCore.Error.MutexOwnerAquire);
+}
+
+test "Mutex Aquire Test 2" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try expect(!TestArch.schedulerRan());
+    try expect(mutex1._owner == &test_task1);
+
+    try test_task1.suspendMe();
+    try expect(TestArch.schedulerRan());
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try expect(TestArch.schedulerRan());
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 3);
+}
+
+test "Mutex Release Test" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    try expect(mutex1.release() == OsCore.Error.InvalidMutexOwner);
+}
+
+test "Mutex Release Test 2" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try test_task1.suspendMe();
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+
+    try expect(mutex1.release() == OsCore.Error.InvalidMutexOwner);
+}
+
+test "Mutex Release Test 3" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try expect(mutex1._owner == &test_task1);
+    try mutex1.release();
+    try expect(mutex1._owner == null);
+    try expect(!TestArch.schedulerRan());
+}
+
+test "Mutex Abort Test" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    try expect(mutex1._owner == &test_task1);
+    try test_task1.suspendMe();
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 3);
+
+    try mutex1.abortAcquire(&test_task2);
+    try expect(TestArch.schedulerRan());
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+
+    try expect(mutex1.acquire(.{ .timeout_ms = 0 }) == OsCore.Error.Aborted);
+}
+
+test "Mutex Abort Test 2" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1._syncContext._init = true;
+
+    try mutex1.acquire(.{ .timeout_ms = 0 });
+    task_control.setNextRunningTask();
+    try expect(mutex1.abortAcquire(&test_task2) == OsCore.Error.TaskNotBlockedBySync);
+}
+
+test "Mutex Timeout Test" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    mutex1.init();
+    mutex1._owner = &test_task4;
+
+    try mutex1.acquire(.{ .timeout_ms = 1 });
+    OsCore.systemTick();
+    try expect(task_control.running_priority == 1);
+    try expect(mutex1.acquire(.{}) == OsCore.Error.TimedOut);
+    task_control.setNextRunningTask();
+    try mutex1.abortAcquire(&test_task1);
+
+    //clean up
+    try mutex1.deinit();
+}
+
+test "Mutex Timeout Test 2" {
+    task_setup();
+    var mutex1 = Mutex.create_mutex("test_mutex1");
+    var mutex2 = Mutex.create_mutex("test_mutex1");
+    mutex1.init();
+    mutex2.init();
+    mutex1._owner = &test_task4;
+    mutex2._owner = &test_task4;
+
+    try mutex1.acquire(.{ .timeout_ms = 1 });
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+    try mutex2.acquire(.{ .timeout_ms = 1 });
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 3);
+
+    OsCore.systemTick();
+    try expect(test_task1._state == OsTask.State.running);
+    try expect(test_task1._SyncContext.timed_out);
+    try expect(test_task2._state == OsTask.State.ready);
+    try expect(test_task2._SyncContext.timed_out);
+
+    //clean up
+    try mutex1.deinit();
+    try mutex2.deinit();
 }
 
 /////////////////////////////////////////////
@@ -521,7 +725,7 @@ test "Semaphore timeout2" {
     task_control.setNextRunningTask();
     try semaphore2.acquire(.{ .timeout_ms = 1 });
     task_control.setNextRunningTask();
-    try expect(task_control.running_priority == 32);
+    try expect(task_control.running_priority == 3);
 
     OsCore.systemTick();
     try expect(test_task1._state == OsTask.State.running);

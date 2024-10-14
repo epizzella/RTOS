@@ -44,12 +44,17 @@ pub const Mutex = struct {
         };
     }
 
-    /// Add the semaphore to the OS
+    /// Add the mutex to the OS
     pub fn init(self: *Self) void {
         if (!self._syncContext._init) {
             Control.add(&self._syncContext);
             self._syncContext._init = true;
         }
+    }
+
+    /// Remove the mutex from the OS
+    pub fn deinit(self: *Self) Error!void {
+        try Control.remove(&self._syncContext);
     }
 
     pub const AquireOptions = struct {
@@ -65,6 +70,7 @@ pub const Mutex = struct {
     /// the mutex is unlocked. Cannot be called from an interrupt.
     pub fn acquire(self: *Self, options: AquireOptions) Error!void {
         const running_task = try OsCore.validateCallMajor();
+        if (running_task == self._owner) return Error.MutexOwnerAquire;
         arch.criticalStart();
         defer arch.criticalEnd();
 
@@ -97,7 +103,7 @@ pub const Mutex = struct {
                 }
             }
         } else {
-            return Error.TaskNotOwner;
+            return Error.InvalidMutexOwner;
         }
     }
 

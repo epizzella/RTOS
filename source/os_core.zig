@@ -192,8 +192,10 @@ pub const Error = error{
     IllegalIdleTask,
     /// Illegal call from interrupt
     IllegalInterruptAccess,
-    /// A task that does not own this OS object attempted access
-    TaskNotOwner,
+    /// A task that does not own this mutex attempted release
+    InvalidMutexOwner,
+    ///The task that owns this mutex attempted to aquire it a second time
+    MutexOwnerAquire,
     /// Time out limit reached.
     TimedOut,
     /// Function manually aborted

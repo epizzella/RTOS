@@ -81,15 +81,17 @@ pub const Task = struct {
     /// Suspend the task
     pub fn suspendMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        //TODO: return an error is the task is blocked.
+        //TODO: return an error if the task is blocked.
         task_control.suspendTask(self);
+        arch.runScheduler();
     }
 
     /// Resume the task
     pub fn resumeMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        //TODO: return an error is the task is not suspended.
+        //TODO: return an error if the task is not suspended.
         task_control.readyTask(self);
+        arch.runScheduler();
     }
 };
 
