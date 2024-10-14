@@ -21,6 +21,7 @@ pub var scheduler: bool = false;
 pub var contex_switch: bool = false;
 pub var int_active: bool = false;
 pub var debug_atached: bool = false;
+pub var criticalSection: bool = false;
 
 //Test function
 pub fn schedulerRan() bool {
@@ -31,6 +32,10 @@ pub fn schedulerRan() bool {
 pub fn contextSwitchRan() bool {
     defer contex_switch = false;
     return contex_switch;
+}
+
+pub fn getCriticalSection() bool {
+    return criticalSection;
 }
 
 pub fn setDebug(attached: bool) void {
@@ -59,11 +64,13 @@ pub fn interruptActive(self: *Self) bool {
 //Enable Interrupts
 pub inline fn criticalEnd(self: *Self) void {
     _ = self;
+    criticalSection = false;
 }
 
 //Disable Interrupts
 pub inline fn criticalStart(self: *Self) void {
     _ = self;
+    criticalSection = true;
 }
 
 pub inline fn runScheduler(self: *Self) void {

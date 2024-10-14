@@ -74,6 +74,17 @@ fn task_setup() void {
     _ = TestArch.contextSwitchRan();
 }
 
+fn clearPointers() void {
+    test_task1._to_head = null;
+    test_task1._to_tail = null;
+    test_task2._to_head = null;
+    test_task2._to_tail = null;
+    test_task3._to_head = null;
+    test_task3._to_tail = null;
+    test_task4._to_head = null;
+    test_task4._to_tail = null;
+}
+
 /////////////////////////////////////////////
 //            Task Unit Tests             //
 ///////////////////////////////////////////
@@ -98,18 +109,7 @@ test "Task Resume Test" {
 //         Task Queue Unit Tests          //
 ///////////////////////////////////////////
 
-fn clearPointers() void {
-    test_task1._to_head = null;
-    test_task1._to_tail = null;
-    test_task2._to_head = null;
-    test_task2._to_tail = null;
-    test_task3._to_head = null;
-    test_task3._to_tail = null;
-    test_task4._to_head = null;
-    test_task4._to_tail = null;
-}
-
-test "Task Queue Insert After Append 1 Node" {
+test "Task Queue Insert After Append 1 Node Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -123,7 +123,7 @@ test "Task Queue Insert After Append 1 Node" {
     try expect(test_task1._to_tail == null);
 }
 
-test "Task Queue Insert After Append 2 Nodes" {
+test "Task Queue Insert After Append 2 Nodes Test" {
     clearPointers();
     var queue: TaskQueue = .{};
     queue.insertAfter(&test_task1, null);
@@ -139,7 +139,7 @@ test "Task Queue Insert After Append 2 Nodes" {
     try expect(test_task2._to_tail == null);
 }
 
-test "Task Queue Insert After Append 3 Nodes" {
+test "Task Queue Insert After Append 3 Nodes Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -159,7 +159,7 @@ test "Task Queue Insert After Append 3 Nodes" {
     try expect(test_task3._to_tail == null);
 }
 
-test "Task Queue Insert After 4 Nodes" {
+test "Task Queue Insert After 4 Nodes Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -182,7 +182,7 @@ test "Task Queue Insert After 4 Nodes" {
     try expect(test_task3._to_tail == null);
 }
 
-test "Task Queue Insert Before Prepend 1 node" {
+test "Task Queue Insert Before Prepend 1 node Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -196,7 +196,7 @@ test "Task Queue Insert Before Prepend 1 node" {
     try expect(test_task1._to_tail == null);
 }
 
-test "Task Queue Insert Before 2 nodes" {
+test "Task Queue Insert Before 2 nodes Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -213,7 +213,7 @@ test "Task Queue Insert Before 2 nodes" {
     try expect(test_task1._to_tail == null);
 }
 
-test "Task Queue Insert Before Prepend 3 Nodes" {
+test "Task Queue Insert Before Prepend 3 Nodes Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -233,7 +233,7 @@ test "Task Queue Insert Before Prepend 3 Nodes" {
     try expect(test_task3._to_tail == null);
 }
 
-test "Task Queue Insert Before 4 nodes" {
+test "Task Queue Insert Before 4 nodes Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -256,7 +256,7 @@ test "Task Queue Insert Before 4 nodes" {
     try expect(test_task3._to_tail == null);
 }
 
-test "Task Queue Insert Sorted 1 node" {
+test "Task Queue Insert Sorted 1 node Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -270,7 +270,7 @@ test "Task Queue Insert Sorted 1 node" {
     try expect(test_task1._to_tail == null);
 }
 
-test "Task Queue Insert Mixed" {
+test "Task Queue Insert Mixed Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -294,7 +294,7 @@ test "Task Queue Insert Mixed" {
     try expect(test_task4._to_tail == null);
 }
 
-test "Task Queue Insert Sorted 4 Nodes - 1" {
+test "Task Queue Insert Sorted 4 Nodes - 1 Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -317,7 +317,7 @@ test "Task Queue Insert Sorted 4 Nodes - 1" {
     try expect(test_task4._to_tail == null);
 }
 
-test "Task Queue Insert Sorted 4 Nodes - 2" {
+test "Task Queue Insert Sorted 4 Nodes - 2 Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -340,7 +340,7 @@ test "Task Queue Insert Sorted 4 Nodes - 2" {
     try expect(test_task4._to_tail == null);
 }
 
-test "Task Queue Insert Sorted 4 Nodes - 3" {
+test "Task Queue Insert Sorted 4 Nodes - 3 Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -364,7 +364,7 @@ test "Task Queue Insert Sorted 4 Nodes - 3" {
     try expect(test_task4._to_tail == null);
 }
 
-test "Task Queue Pop - 1" {
+test "Task Queue Pop - 1 Test" {
     clearPointers();
 
     var queue: TaskQueue = .{};
@@ -733,3 +733,23 @@ test "Semaphore timeout2" {
     try expect(test_task2._state == OsTask.State.ready);
     try expect(test_task2._SyncContext.timed_out);
 }
+
+/////////////////////////////////////////////
+//         Event Group Unit Tests         //
+///////////////////////////////////////////
+
+/////////////////////////////////////////////
+//          Msg Queue Unit Tests          //
+///////////////////////////////////////////
+
+/////////////////////////////////////////////
+//           Os Time Unit Tests           //
+///////////////////////////////////////////
+
+/////////////////////////////////////////////
+//           Os Core Unit Tests           //
+///////////////////////////////////////////
+
+/////////////////////////////////////////////
+//           Os Api Unit Tests            //
+///////////////////////////////////////////
