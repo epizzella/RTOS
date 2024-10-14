@@ -23,17 +23,18 @@ const ArchInterface = @import("../arch/arch_interface.zig");
 var arch = ArchInterface.arch;
 
 const task_control = &OsTask.task_control;
+const Task = OsTask.Task;
 const os_config = &OsCore.getOsConfig;
 const Error = OsCore.Error;
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const Mutex = struct {
     const Self = @This();
     const Config = struct { name: []const u8, enable_priority_inheritance: bool = false };
 
     _name: []const u8,
-    _owner: ?*OsTask.Task = null,
+    _owner: ?*Task = null,
     _syncContext: SyncContex = .{},
 
     /// Create a mutex object
@@ -43,12 +44,17 @@ pub const Mutex = struct {
         };
     }
 
-    /// Add the semaphore to the OS
+    /// Add the mutex to the OS
     pub fn init(self: *Self) void {
         if (!self._syncContext._init) {
             Control.add(&self._syncContext);
             self._syncContext._init = true;
         }
+    }
+
+    /// Remove the mutex from the OS
+    pub fn deinit(self: *Self) Error!void {
+        try Control.remove(&self._syncContext);
     }
 
     pub const AquireOptions = struct {
@@ -64,6 +70,7 @@ pub const Mutex = struct {
     /// the mutex is unlocked. Cannot be called from an interrupt.
     pub fn acquire(self: *Self, options: AquireOptions) Error!void {
         const running_task = try OsCore.validateCallMajor();
+        if (running_task == self._owner) return Error.MutexOwnerAquire;
         arch.criticalStart();
         defer arch.criticalEnd();
 
@@ -96,28 +103,14 @@ pub const Mutex = struct {
                 }
             }
         } else {
-            return Error.TaskNotOwner;
+            return Error.InvalidMutexOwner;
         }
     }
 
     /// Readys the task if it is waiting on the mutex. When the task next
     /// runs acquire() will return OsError.Aborted.
     /// * task - The task to abort & ready
-    pub fn abortAcquire(self: *Self, task: OsTask) Error!void {
-        const running_task = try OsCore.validateCallMinor();
-        if (!self._syncContext._init) return Error.Uninitialized;
-
-        arch.criticalStart();
-        defer arch.criticalEnd();
-
-        var q = task._queue orelse return Error.ObjectNotBlocking;
-        if (!q.contains(task)) return Error.ObjectNotBlocking;
-
-        task._SyncContext.aborted = true;
-        task_control.readyTask(task);
-        if (task.priority < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
-        }
+    pub fn abortAcquire(self: *Self, task: *Task) Error!void {
+        try Control.abort(&self._syncContext, task);
     }
 };

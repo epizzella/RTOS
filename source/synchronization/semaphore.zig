@@ -24,10 +24,11 @@ var arch = ArchInterface.arch;
 
 const task_control = &OsTask.task_control;
 const os_config = &OsCore.getOsConfig;
+const Task = OsTask.Task;
 const Error = OsCore.Error;
 
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const Semaphore = struct {
     const Self = @This();
@@ -55,8 +56,12 @@ pub const Semaphore = struct {
     pub fn init(self: *Self) void {
         if (!self._syncContext._init) {
             Control.add(&self._syncContext);
-            self._syncContext._init = true;
         }
+    }
+
+    /// Remove the semaphore from the OS
+    pub fn deinit(self: *Self) Error!void {
+        try Control.remove(&self._syncContext);
     }
 
     pub const AquireOptions = struct {
@@ -90,11 +95,11 @@ pub const Semaphore = struct {
     pub fn release(self: *Self) Error!void {
         arch.criticalStart();
         defer arch.criticalEnd();
-        const active_task = try OsCore.validateCallMajor();
+        const running_task = try OsCore.validateCallMajor();
 
         if (self._syncContext._pending.head) |head| {
             task_control.readyTask(head);
-            if (head._priority < active_task._priority) {
+            if (head._priority < running_task._priority) {
                 arch.criticalEnd();
                 arch.runScheduler();
             }
@@ -105,17 +110,7 @@ pub const Semaphore = struct {
 
     /// Readys the task if it is waiting on the semaphore.  When the task next
     /// runs acquire() will return OsError.Aborted
-    pub fn abortAcquire(self: *Self, task: OsTask) Error!void {
-        const running_task = try OsCore.validateCallMinor();
-        if (!self._syncContext._init) return Error.Uninitialized;
-
-        arch.criticalStart();
-        defer arch.criticalEnd();
-        task._SyncContext.aborted = true;
-        task_control.readyTask(task);
-        if (task.priority < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
-        }
+    pub fn abortAcquire(self: *Self, task: *Task) Error!void {
+        try Control.abort(&self._syncContext, task);
     }
 };

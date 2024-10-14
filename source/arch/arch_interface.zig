@@ -14,8 +14,8 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const ARMv7M = @import("arm-cortex-m/common/arch.zig");
 const TestArch = @import("test/test_arch.zig");
+const ARMv7M = if (builtin.is_test != true) @import("arm-cortex-m/common/arch.zig") else @import("test/test_arch.zig");
 const Task = @import("../task.zig").Task;
 const builtin = @import("builtin");
 const std = @import("std");
@@ -60,14 +60,12 @@ const Arch = union(enum) {
         }
     }
 
-    ///Enable Interrupts
     pub inline fn criticalEnd(self: *Self) void {
         switch (self.*) {
             inline else => |*case| return case.criticalEnd(),
         }
     }
 
-    ///Disable Interrupts
     pub inline fn criticalStart(self: *Self) void {
         switch (self.*) {
             inline else => |*case| return case.criticalStart(),

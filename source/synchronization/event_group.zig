@@ -24,7 +24,7 @@ var arch = ArchInterface.arch;
 const Error = OsCore.Error;
 const task_control = &OsTask.task_control;
 pub const Control = SyncControl.SyncControl;
-const SyncContex = SyncControl.SyncContex;
+const SyncContex = SyncControl.SyncContext;
 
 pub const EventGroup = struct {
     const Self = @This();
@@ -143,26 +143,12 @@ pub const EventGroup = struct {
 
     pub const AbortOptions = struct {
         /// The task to abort pend and ready
-        task: Task,
+        task: *Task,
     };
 
     /// Readys the task if it is waiting on the event group.  When the task next
     /// runs awaitEvent() will return OsError.Aborted
     pub fn abortAwait(self: *Self, options: AbortOptions) Error!void {
-        const running_task = try OsCore.validateCallMinor();
-        if (!self._init) return Error.Uninitialized;
-
-        arch.criticalStart();
-        defer arch.criticalEnd();
-
-        var q = options.task._queue orelse return Error.ObjectNotBlocking;
-        if (!q.contains(options.task)) return Error.ObjectNotBlocking;
-
-        options.task._SyncContext.aborted = true;
-        task_control.readyTask(options.task);
-        if (options.task.priority < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
-        }
+        try Control.abort(&self._syncContext, options.task);
     }
 };

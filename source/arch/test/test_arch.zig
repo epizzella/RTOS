@@ -17,6 +17,36 @@
 const Task = @import("../../task.zig").Task;
 const Self = @This();
 
+pub var scheduler: bool = false;
+pub var contex_switch: bool = false;
+pub var int_active: bool = false;
+pub var debug_atached: bool = false;
+pub var criticalSection: bool = false;
+
+//Test function
+pub fn schedulerRan() bool {
+    defer scheduler = false;
+    return scheduler;
+}
+
+pub fn contextSwitchRan() bool {
+    defer contex_switch = false;
+    return contex_switch;
+}
+
+pub fn getCriticalSection() bool {
+    return criticalSection;
+}
+
+pub fn setDebug(attached: bool) void {
+    debug_atached = attached;
+}
+
+pub fn setInterruptActive(active: bool) void {
+    int_active = active;
+}
+
+//Interface
 pub fn coreInit(self: *Self) void {
     _ = self;
 }
@@ -28,28 +58,32 @@ pub fn initStack(self: *Self, task: *Task) void {
 
 pub fn interruptActive(self: *Self) bool {
     _ = self;
-    return false;
-}
-
-pub inline fn criticalEnd(self: *Self) void {
-    _ = self;
+    return int_active;
 }
 
 //Enable Interrupts
-pub inline fn criticalStart(self: *Self) void {
+pub inline fn criticalEnd(self: *Self) void {
     _ = self;
+    criticalSection = false;
 }
 
 //Disable Interrupts
+pub inline fn criticalStart(self: *Self) void {
+    _ = self;
+    criticalSection = true;
+}
+
 pub inline fn runScheduler(self: *Self) void {
     _ = self;
+    scheduler = true;
 }
 
 pub inline fn runContextSwitch(self: *Self) void {
     _ = self;
+    contex_switch = true;
 }
 
 pub inline fn isDebugAttached(self: *Self) bool {
     _ = self;
-    return false;
+    return debug_atached;
 }
