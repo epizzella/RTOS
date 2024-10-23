@@ -6,7 +6,13 @@ A Real Time Operating System written in Zig
 
 - [X] Priority based scheduling
 - [X] 32 priority levels for user tasks plus 1 resevered priority level (lowest prioirty) for the idle task
-  - [X] Callback function for idle task
+- [ ] Callback functions
+  - [X] Idle task
+  - [X] OS Tick
+  - [ ] Task Return
+    - [x] Individual Task Error Handler
+    - [ ] Individual Task Exit Handler
+  - [ ] Context Switch 
 - [X] Unlimited tasks per priority level
 - [X] Tasks return anyerror!void.  Users have the option to provide an error handler callback. 
 - [X] Mutexes
@@ -18,7 +24,7 @@ A Real Time Operating System written in Zig
   - [ ] Unit Tests
 - [X] Messages Queues
   - [ ] Unit Tests
-- [ ] Software Timers
+- [X] Software Timers
   - [ ] Unit Tests
 - [ ] Debug information / Debug task
   - [ ] Unit Tests

@@ -45,10 +45,9 @@ pub const Mutex = struct {
     }
 
     /// Add the mutex to the OS
-    pub fn init(self: *Self) void {
+    pub fn init(self: *Self) Error!void {
         if (!self._syncContext._init) {
-            Control.add(&self._syncContext);
-            self._syncContext._init = true;
+            try Control.add(&self._syncContext);
         }
     }
 

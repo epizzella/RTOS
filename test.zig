@@ -11,7 +11,7 @@ const task_control = &OsTask.task_control;
 const Task = OsTask.Task;
 const TaskQueue = OsTask.TaskQueue;
 
-var test_stack: [20]u32 = [_]u32{0xDEADC0DE} ** 20;
+var test_stack: [20]usize = [_]usize{0xDEADC0DE} ** 20;
 fn test_fn() !void {}
 
 var test_task1 = Task.create_task(.{
@@ -50,14 +50,16 @@ var idle_task = Task.create_task(.{
 });
 
 fn task_setup() void {
+    test_task1._init = false;
+    test_task2._init = false;
+    test_task3._init = false;
+    test_task4._init = false;
+
     test_task1.init();
     test_task2.init();
     test_task3.init();
     test_task4.init();
-    task_control.readyTask(&test_task1);
-    task_control.readyTask(&test_task2);
-    task_control.readyTask(&test_task3);
-    task_control.readyTask(&test_task4);
+
     test_task1._SyncContext.aborted = false;
     test_task2._SyncContext.aborted = false;
     test_task3._SyncContext.aborted = false;
@@ -394,9 +396,9 @@ test "Mutex Init/Deinit Test" {
     var mutex2 = Mutex.create_mutex("test_mutex1");
     var mutex3 = Mutex.create_mutex("test_mutex1");
     //init test
-    mutex1.init();
-    mutex2.init();
-    mutex3.init();
+    try mutex1.init();
+    try mutex2.init();
+    try mutex3.init();
 
     try expect(mutex1._syncContext._init == true);
     try expect(mutex1._syncContext._prev == &mutex2._syncContext);
@@ -530,10 +532,13 @@ test "Mutex Abort Test 2" {
 test "Mutex Timeout Test" {
     task_setup();
     var mutex1 = Mutex.create_mutex("test_mutex1");
-    mutex1.init();
+    try mutex1.init();
     mutex1._owner = &test_task4;
 
     try mutex1.acquire(.{ .timeout_ms = 1 });
+    task_control.setNextRunningTask();
+    try expect(task_control.running_priority == 2);
+
     OsCore.systemTick();
     try expect(task_control.running_priority == 1);
     try expect(mutex1.acquire(.{}) == OsCore.Error.TimedOut);
@@ -548,8 +553,8 @@ test "Mutex Timeout Test 2" {
     task_setup();
     var mutex1 = Mutex.create_mutex("test_mutex1");
     var mutex2 = Mutex.create_mutex("test_mutex1");
-    mutex1.init();
-    mutex2.init();
+    try mutex1.init();
+    try mutex2.init();
     mutex1._owner = &test_task4;
     mutex2._owner = &test_task4;
 
@@ -580,9 +585,9 @@ test "Semaphore Init/Deinit Test" {
     var semaphore2 = Semaphore.create_semaphore(.{ .name = "test_sem2", .inital_value = 1 });
     var semaphore3 = Semaphore.create_semaphore(.{ .name = "test_sem3", .inital_value = 1 });
     //init test
-    semaphore1.init();
-    semaphore2.init();
-    semaphore3.init();
+    try semaphore1.init();
+    try semaphore2.init();
+    try semaphore3.init();
 
     try expect(semaphore1._syncContext._init == true);
     try expect(semaphore1._syncContext._prev == &semaphore2._syncContext);
@@ -625,17 +630,17 @@ test "Semaphore Aquire Test" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 1 });
     semaphore._syncContext._init = true;
 
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     try expect(TestArch.schedulerRan() == false);
     try expect(semaphore._count == 0);
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     try expect(TestArch.schedulerRan() == true);
 }
 
 test "Semaphore Release Test" {
     task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
-    try semaphore.release();
+    try semaphore.post(.{});
 
     try expect(semaphore._count == 1);
     try expect(TestArch.schedulerRan() == false);
@@ -646,10 +651,10 @@ test "Semaphore Release Test 2" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     task_control.setNextRunningTask();
     try expect(task_control.running_priority == 2);
-    try semaphore.release();
+    try semaphore.post(.{});
     try expect(semaphore._count == 0);
     try expect(TestArch.schedulerRan() == true);
 }
@@ -664,11 +669,11 @@ test "Semaphore Release Test 3" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     try expect(TestArch.schedulerRan() == true);
     task_control.setNextRunningTask();
     try expect(task_control.running_priority == 1);
-    try semaphore.release();
+    try semaphore.post(.{});
     try expect(semaphore._count == 0);
     try expect(TestArch.schedulerRan() == false);
 }
@@ -678,13 +683,13 @@ test "Semaphore Abort Test" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     task_control.setNextRunningTask();
     try semaphore.abortAcquire(&test_task1);
     try expect(test_task1._SyncContext.aborted == true);
     try expect(TestArch.schedulerRan());
     task_control.setNextRunningTask();
-    try expect(semaphore.acquire(.{ .timeout_ms = 0 }) == OsCore.Error.Aborted);
+    try expect(semaphore.wait(.{ .timeout_ms = 0 }) == OsCore.Error.Aborted);
 }
 
 test "Semaphore Abort Test2" {
@@ -692,7 +697,7 @@ test "Semaphore Abort Test2" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     semaphore._syncContext._init = true;
 
-    try semaphore.acquire(.{ .timeout_ms = 0 });
+    try semaphore.wait(.{ .timeout_ms = 0 });
     task_control.setNextRunningTask();
     try expect(semaphore.abortAcquire(&test_task2) == OsCore.Error.TaskNotBlockedBySync);
 }
@@ -700,12 +705,12 @@ test "Semaphore Abort Test2" {
 test "Semaphore timeout" {
     task_setup();
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
-    semaphore.init();
+    try semaphore.init();
 
-    try semaphore.acquire(.{ .timeout_ms = 1 });
+    try semaphore.wait(.{ .timeout_ms = 1 });
     OsCore.systemTick();
     try expect(task_control.running_priority == 1);
-    try expect(semaphore.acquire(.{}) == OsCore.Error.TimedOut);
+    try expect(semaphore.wait(.{}) == OsCore.Error.TimedOut);
     task_control.setNextRunningTask();
     try semaphore.abortAcquire(&test_task1);
 
@@ -718,12 +723,12 @@ test "Semaphore timeout2" {
     var semaphore = Semaphore.create_semaphore(.{ .name = "test_sem", .inital_value = 0 });
     var semaphore2 = Semaphore.create_semaphore(.{ .name = "test_sem2", .inital_value = 0 });
 
-    semaphore.init();
-    semaphore2.init();
+    try semaphore.init();
+    try semaphore2.init();
 
-    try semaphore.acquire(.{ .timeout_ms = 1 });
+    try semaphore.wait(.{ .timeout_ms = 1 });
     task_control.setNextRunningTask();
-    try semaphore2.acquire(.{ .timeout_ms = 1 });
+    try semaphore2.wait(.{ .timeout_ms = 1 });
     task_control.setNextRunningTask();
     try expect(task_control.running_priority == 3);
 

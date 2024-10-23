@@ -51,10 +51,9 @@ pub const EventGroup = struct {
     }
 
     /// Add the event group to the OS
-    pub fn init(self: *Self) void {
+    pub fn init(self: *Self) Error!void {
         if (!self._syncContex._init) {
-            Control.add(&self._syncContex);
-            self._syncContex._init = true;
+            try Control.add(&self._syncContex);
         }
     }
 

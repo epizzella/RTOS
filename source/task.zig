@@ -73,7 +73,7 @@ pub const Task = struct {
     /// Add task to the OS
     pub fn init(self: *Self) void {
         if (!self._init) {
-            task_control.addReady(self);
+            task_control.readyTask(self);
             self._init = true;
         }
     }
@@ -215,20 +215,14 @@ pub const TaskControl = struct {
     ///Updates the delayed time for each sleeping task
     pub fn updateDelayedTasks(self: *TaskControl) void {
         for (&self.table) |*taskState| {
-            if (taskState.yielded_tasks.head) |head| {
-                var task = head;
-                while (true) { //iterate over the priority level list
-                    task._timeout -= 1;
-                    if (task._timeout == 0) {
-                        self.readyTask(task);
-                    }
-
-                    if (task._to_tail) |next| {
-                        task = next;
-                    } else {
-                        break;
-                    }
+            var opt_task = taskState.yielded_tasks.head;
+            while (opt_task) |task| {
+                task._timeout -= 1;
+                if (task._timeout == 0) {
+                    self.readyTask(task);
                 }
+
+                opt_task = task._to_tail;
             }
         }
     }

@@ -61,11 +61,14 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             };
         }
 
-        pub fn init(self: *Self) void {
+        pub fn init(self: *Self) Error!void {
             if (!self._syncContex._init) {
-                Control.add(&self._syncContex);
-                self._syncContex._init = true;
+                try Control.add(&self._syncContex);
             }
+        }
+
+        pub fn deinit(self: *Self) void {
+            _ = self;
         }
 
         pub fn pushMsg(self: *Self, msg: opt.MsgType) Error!void {

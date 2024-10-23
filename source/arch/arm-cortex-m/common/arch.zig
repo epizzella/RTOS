@@ -79,7 +79,10 @@ pub inline fn isDebugAttached(self: *Self) bool {
 ///////////////////////////////////////////
 
 export fn SysTick_Handler() void {
-    OsCore.systemTick();
+    var self = Self{};
+    self.criticalStart();
+    OsCore.OsTick();
+    self.criticalEnd();
 }
 
 export fn SVC_Handler() void {
