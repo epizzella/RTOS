@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
-
+const std = @import("std");
 const OsCore = @import("source/os_core.zig");
 const OsTask = @import("source/task.zig");
 const ArchInterface = @import("source/arch/arch_interface.zig");
@@ -88,13 +88,14 @@ pub fn startOS(comptime config: OsConfig) void {
             });
 
             timer_task.init();
-            OsTimer.timer_sem.init() catch {};
+            OsTimer.timer_sem.init() catch unreachable;
         }
 
         task_ctrl.initAllStacks();
 
         //Find offset to stack ptr as zig does not guarantee struct field order
         g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
+        std.mem.doNotOptimizeAway(g_stack_offset);
 
         OsCore.setOsStarted();
         arch.runScheduler(); //begin os

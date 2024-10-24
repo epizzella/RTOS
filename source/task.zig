@@ -14,6 +14,7 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
+const std = @import("std");
 const OsCore = @import("os_core.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 
@@ -128,6 +129,9 @@ pub const TaskControl = struct {
                 }
             }
         }
+
+        std.mem.doNotOptimizeAway(current_task);
+        std.mem.doNotOptimizeAway(next_task);
     }
 
     inline fn clearReadyBit(self: *TaskControl, priority: u6) void {
