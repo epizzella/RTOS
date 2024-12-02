@@ -83,6 +83,10 @@ pub inline fn runContextSwitch(self: *Self) void {
     contex_switch = true;
 }
 
+pub inline fn startOs(self: *Self) void {
+    _ = self;
+}
+
 pub inline fn isDebugAttached(self: *Self) bool {
     _ = self;
     return debug_atached;

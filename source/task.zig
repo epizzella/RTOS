@@ -129,9 +129,6 @@ pub const TaskControl = struct {
                 }
             }
         }
-
-        std.mem.doNotOptimizeAway(current_task);
-        std.mem.doNotOptimizeAway(next_task);
     }
 
     inline fn clearReadyBit(self: *TaskControl, priority: u6) void {
@@ -187,7 +184,7 @@ pub const TaskControl = struct {
     }
 
     ///Pop the active task from its active queue
-    pub fn popActive(self: *TaskControl) ?*Task {
+    pub fn popRunningTask(self: *TaskControl) ?*Task {
         const head = self.table[self.running_priority].ready_tasks.pop();
         if (self.table[self.running_priority].ready_tasks.head == null) {
             self.clearReadyBit(self.running_priority);
@@ -203,6 +200,14 @@ pub const TaskControl = struct {
         }
     }
 
+    pub fn getRunningTask(self: *TaskControl) *Task {
+        if (self.table[self.running_priority].ready_tasks.head) |running| {
+            return running;
+        } else {
+            @panic("Running Task Null.  Os not Started.");
+        }
+    }
+
     ///Set `next_task` to the highest priority task that is ready to run
     pub fn setNextRunningTask(self: *TaskControl) void {
         self.running_priority = @clz(self.ready_mask);
@@ -210,7 +215,7 @@ pub const TaskControl = struct {
         next_task._state = State.running;
     }
 
-    ///Returns true if `current_task` and `next_task` are different
+    ///Returns true if the running task and `next_task` are different
     pub fn validSwitch(self: *TaskControl) bool {
         _ = self;
         return current_task != next_task;
@@ -378,7 +383,7 @@ pub const TaskQueue = struct {
         return rtn;
     }
 
-    ///Move the head task to the tail position
+    ///Move the head task to the tail position.
     pub fn headToTail(self: *Self) void {
         if (self.head != self.tail) {
             if (self.head != null and self.tail != null) {
@@ -405,7 +410,7 @@ pub fn taskTopRoutine() void {
     }
 
     arch.criticalStart();
-    if (task_control.popActive()) |active_task| {
+    if (task_control.popRunningTask()) |active_task| {
         task_control.addSuspended(active_task);
         active_task._state = State.exited;
     }

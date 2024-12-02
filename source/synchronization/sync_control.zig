@@ -68,7 +68,7 @@ pub const SyncControl = struct {
     }
 
     pub fn blockTask(blocker: *SyncContext, timeout_ms: u32) !void {
-        if (task_control.popActive()) |task| {
+        if (task_control.popRunningTask()) |task| {
             blocker._pending.insertSorted(task);
             task._timeout = (timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
             task._state = OsTask.State.blocked;

@@ -55,7 +55,7 @@ pub inline fn criticalEnd(self: *Self) void {
     asm volatile ("CPSIE    I");
 }
 
-//Disable Interrupts
+///Disable Interrupts
 pub inline fn criticalStart(self: *Self) void {
     _ = self;
     asm volatile ("CPSID    I");
@@ -70,41 +70,58 @@ pub inline fn runContextSwitch(self: *Self) void {
     self.ICSR.PENDSVSET = true;
 }
 
+pub inline fn startOs(self: *Self) void {
+    _ = self;
+    // firstContextSwitch();
+}
+
 pub inline fn isDebugAttached(self: *Self) bool {
     return self.DHCSR.C_DEBUGEN;
 }
 
-extern var current_task: ?*volatile Task;
-extern var next_task: *volatile Task;
-extern var g_stack_offset: usize;
+// extern var current_task: ?*volatile Task;
+// extern var next_task: *volatile Task;
+// extern var g_stack_offset: usize;
 
-pub inline fn contextSwitch() void {
-    asm volatile (
-        \\      .extern  current_task
-        \\      .extern  next_task
-        \\      .extern  g_stack_offset
-        \\
-        \\      CPSID   I                           /*disable interrupts*/
-        \\      LDR     R2,     =g_stack_offset
-        \\      LDR     R2,     [R2]
-        \\      AND     R2,     R2,     0x0000000F
-        \\      LDR     R0,     =current_task
-        \\      LDR     R1,     [R0]
-        \\      CMP.W   R1,     #0                  /*if current_task != null*/
-        \\      BEQ.N   SpEqlNextSp
-        \\      PUSH    {R4-R11}                    /*push registers r4-r11 on the stack*/
-        \\      STR     SP,     [R1, R2]            /*save the current stack pointer in current_task*/
-        \\  SpEqlNextSp:
-        \\      LDR     R3,     =next_task
-        \\      LDR     R3,     [R3]
-        \\      LDR     SP,     [R3, R2]            /*Set stack pointer to next_task stack pointer*/
-        \\      STR     R3,     [R0,#0x00]          /*Set current_task to next_task*/
-        \\      POP     {r4-r11}                    /*pop registers r4-r11*/
-        \\      CPSIE   I                           /*enable interrupts*/
-        \\      BX      LR                          /*return to task*/
-    );
-}
+export var my_test: u32 = 10;
 
+// pub export fn contextSwitch() void {
+//     //var running = task_ctrl.getRunningTask();
+//     // _ = current_task;
+//     // asm volatile (
+//     //     \\      CPSID   I                           /*disable interrupts*/
+//     //     \\      LDR     R1,     =current_task
+//     //     \\      LDR     R0,     [R1]
+//     //     \\      PUSH    {R4-R11}                    /*push registers r4-r11 on the stack*/
+//     //     \\      STR     SP,     [R0, %[offset]]     /*save the current stack pointer in current_task*/
+//     //     \\      LDR     R3,     =next_task
+//     //     \\      LDR     R3,     [R3]
+//     //     \\      LDR     SP,     [R3, %[offset]]     /*Set stack pointer to next_task stack pointer*/
+//     //     \\      STR     R3,     [R1, #0x00]         /*Set current_task to next_task*/
+//     //     \\      POP     {r4-r11}                    /*pop registers r4-r11*/
+//     //     \\      CPSIE   I                           /*enable interrupts*/
+//     //     :
+//     //     : [offset] "l" (g_stack_offset),
+//     //       //[r_task] "l" (&running),
+//     // );
+//     // _ = my_test;
+//     // asm volatile (
+//     //     \\  LDR     R1, =my_test
+//     // );
+// }
+
+// pub inline fn firstContextSwitch() void {
+//     asm volatile (
+//         \\      CPSID   I                           /*disable interrupts*/
+//         \\      LDR     R0,     =next_task
+//         \\      LDR     R0,     [R0]
+//         \\      LDR     SP,     [R0, %[offset]]     /*Set stack pointer to next_task stack pointer*/
+//         \\      POP     {r4-r11}                    /*pop registers r4-r11*/
+//         \\      CPSIE   I                           /*enable interrupts*/
+//         :
+//         : [offset] "l" (g_stack_offset),
+//     );
+// }
 /////////////////////////////////////////////
 //         Exception Handlers             //
 ///////////////////////////////////////////
@@ -123,9 +140,9 @@ export fn SVC_Handler() void {
     self.criticalEnd();
 }
 
-export fn PendSV_Handler() void {
-    contextSwitch();
-}
+// export fn PendSV_Handler() void {
+//     contextSwitch();
+// }
 
 /////////////////////////////////////////////
 //   System Control Register Addresses    //

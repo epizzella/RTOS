@@ -84,6 +84,12 @@ const Arch = union(enum) {
         }
     }
 
+    pub inline fn startOs(self: *Self) void {
+        switch (self.*) {
+            inline else => |*case| return case.startOs(),
+        }
+    }
+
     pub inline fn isDebugAttached(self: *Self) bool {
         switch (self.*) {
             inline else => |*case| return case.isDebugAttached(),
