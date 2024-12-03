@@ -45,7 +45,7 @@ pub fn create_task(config: OsTask.Task.TaskConfig) Task {
     return Task.create_task(config);
 }
 
-export var g_stack_offset: usize = 0x08;
+pub var g_stack_offset: usize = 0x08;
 
 /// The operating system will begin multitasking.  This function should only be
 /// called once.  Subsequent calls have no effect.  The frist time this function
@@ -76,7 +76,7 @@ pub fn startOS(comptime config: OsConfig) void {
 
         if (config.timer_config.timer_enable) {
             comptime {
-                if (config.idle_stack_size < OsCore.DEFAULT_IDLE_TASK_SIZE) {
+                if (config.timer_config.timer_stack_size < OsCore.DEFAULT_IDLE_TASK_SIZE) {
                     @compileError("Timer stack size cannont be less than the default size.");
                 }
             }

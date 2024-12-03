@@ -58,9 +58,6 @@ pub const Task = struct {
 
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
-        //TODO: is there anyway to run init() at comptime?  I need to understand when pointers
-        //can an cannot be used at comptime.
-
         return Task{
             ._name = config.name,
             ._stack = config.stack,
@@ -112,8 +109,8 @@ pub const TaskControl = struct {
     ready_mask: u32 = 0, //          mask of ready tasks
     running_priority: u6 = 0x00, //  priority level of the current running task
 
-    export var current_task: ?*volatile Task = null;
-    export var next_task: *volatile Task = undefined;
+    pub var current_task: ?*volatile Task = null;
+    pub var next_task: *volatile Task = undefined;
 
     ///Initalize the stacks for every task added to the OS
     pub fn initAllStacks(self: *TaskControl) void {
@@ -196,7 +193,10 @@ pub const TaskControl = struct {
     ///Move the head task to the tail position of the active queue
     pub fn cycleActive(self: *TaskControl) void {
         if (self.running_priority < MAX_PRIO_LEVEL) {
-            self.table[self.running_priority].ready_tasks.headToTail();
+            var task = self.table[self.running_priority].ready_tasks.head;
+            if (self.table[self.running_priority].ready_tasks.headToTail()) {
+                task.?._state = State.ready;
+            }
         }
     }
 
@@ -212,7 +212,6 @@ pub const TaskControl = struct {
     pub fn setNextRunningTask(self: *TaskControl) void {
         self.running_priority = @clz(self.ready_mask);
         next_task = self.table[self.running_priority].ready_tasks.head.?;
-        next_task._state = State.running;
     }
 
     ///Returns true if the running task and `next_task` are different
@@ -384,7 +383,8 @@ pub const TaskQueue = struct {
     }
 
     ///Move the head task to the tail position.
-    pub fn headToTail(self: *Self) void {
+    pub fn headToTail(self: *Self) bool {
+        var rtn = false;
         if (self.head != self.tail) {
             if (self.head != null and self.tail != null) {
                 const temp = self.head;
@@ -395,8 +395,11 @@ pub const TaskQueue = struct {
                 self.tail.?._to_tail = temp;
                 temp.?._to_head = self.tail;
                 self.tail = temp;
+                rtn = true;
             }
         }
+
+        return rtn;
     }
 };
 
