@@ -21,6 +21,7 @@ const OsTask = @import("../../task.zig");
 const Os = @import("../../../os.zig");
 
 pub inline fn contextSwitch() void {
+    OsTask.TaskControl.next_task._state = OsTask.State.running;
     if (builtin.abi == std.Target.Abi.eabi) {
         asm volatile (
             \\  CPSID   I                                      
@@ -36,6 +37,7 @@ pub inline fn contextSwitch() void {
             \\  MSR     PSP, R12                                     /* Load PSP with new stack pointer */
             \\  STR     %[next_task], [%[current_task], #0x00]       /* Set current_task to next_task */
             \\  CPSIE   I
+            \\  BX      LR
             :
             : [next_task] "l" (OsTask.TaskControl.next_task),
               [current_task] "l" (&OsTask.TaskControl.current_task),
@@ -49,23 +51,25 @@ pub inline fn contextSwitch() void {
             \\  CMP      R0, #0                                       /* If current_task is null skip context save */
             \\  BEQ      ContextRestore 
             \\  MRS      R12, PSP                                     /* Move process stack pointer into R12 */
-            \\
-            \\  TST      LR, #0x10                                    /* If the task was using FPU push FPU registers*/
+            \\ 
+            \\  TST      LR, #0x10                                    /* If the task was using FPU push FPU registers */
+            \\  IT       EQ
             \\  VSTMDBEQ R12!,{S16-S31}
             \\ 
             \\  STMDB    R12!, {R4-R11, LR}                           /* Push registers R4-R11 & LR on the stack */
             \\  STR      R12, [R0, %[offset]]                         /* Save the current stack pointer in current_task */
             \\ContextRestore:                                           
             \\  LDR      R12, [%[next_task], %[offset]]               /* Set stack pointer to next_task stack pointer */
-            \\
             \\  LDMIA    R12!, {R4-R11, LR}                           /* Pop registers R4-R11 & LR */
             \\
-            \\  TST      LR, #0x10                                    /* If the task was using FPU pop FPU registers*/
-            \\  VLDMIANE R12!,{S16-S31} 
+            \\  TST      LR, #0x10                                    /* If the task was using FPU pop FPU registers */
+            \\  IT       EQ
+            \\  VLDMIAEQ R12!,{S16-S31} 
             \\                                   
-            \\  MSR      PSP, R12                                     /* Load PSP with new stack pointer*/
+            \\  MSR      PSP, R12                                     /* Load PSP with new stack pointer */
             \\  STR      %[next_task], [%[current_task], #0x00]       /* Set current_task to next_task */
             \\  CPSIE    I
+            \\  BX       LR
             :
             : [next_task] "l" (OsTask.TaskControl.next_task),
               [current_task] "l" (&OsTask.TaskControl.current_task),
