@@ -22,6 +22,7 @@ const Os = @import("../../../os.zig");
 
 pub inline fn contextSwitch() void {
     OsTask.TaskControl.next_task._state = OsTask.State.running;
+
     if (builtin.abi == std.Target.Abi.eabi) {
         asm volatile (
             \\  CPSID   I                                      
@@ -79,8 +80,6 @@ pub inline fn contextSwitch() void {
     } else {
         @compileError("Invalid abi; abi must equal eabi or eabihf.");
     }
-
-    OsTask.TaskControl.current_task.?._state = OsTask.State.running;
 }
 
 /////////////////////////////////////////////
