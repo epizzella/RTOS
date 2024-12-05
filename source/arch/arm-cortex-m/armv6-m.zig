@@ -15,7 +15,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 const OsTask = @import("../../task.zig");
-const Os = @import("../../../os.zig");
+const OsCore = @import("../../os_core.zig");
 
 pub const minStackSize = 16;
 pub const LOWEST_PRIO_MSK: u2 = 0x3;
@@ -72,7 +72,7 @@ pub inline fn contextSwitch() void {
         :
         : [next_task] "l" (OsTask.TaskControl.next_task),
           [current_task] "l" (&OsTask.TaskControl.current_task),
-          [x] "l" (Os.g_stack_offset),
+          [x] "l" (OsCore.g_stack_offset),
         : "R1", "R4"
     );
 }

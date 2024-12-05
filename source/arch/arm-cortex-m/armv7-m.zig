@@ -18,7 +18,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const OsTask = @import("../../task.zig");
-const Os = @import("../../../os.zig");
+const OsCore = @import("../../os_core.zig");
 
 pub const minStackSize = 17;
 pub const LOWEST_PRIO_MSK: u8 = 0xFF;
@@ -43,7 +43,7 @@ pub inline fn contextSwitch() void {
             :
             : [next_task] "l" (OsTask.TaskControl.next_task),
               [current_task] "l" (&OsTask.TaskControl.current_task),
-              [offset] "l" (Os.g_stack_offset),
+              [offset] "l" (OsCore.g_stack_offset),
             : "R0", "R12"
         );
     } else if (builtin.abi == std.Target.Abi.eabihf) {
@@ -75,7 +75,7 @@ pub inline fn contextSwitch() void {
             :
             : [next_task] "l" (OsTask.TaskControl.next_task),
               [current_task] "l" (&OsTask.TaskControl.current_task),
-              [offset] "l" (Os.g_stack_offset),
+              [offset] "l" (OsCore.g_stack_offset),
             : "R0", "R12"
         );
     } else {

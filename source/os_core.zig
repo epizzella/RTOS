@@ -20,6 +20,8 @@ const Semaphore = @import("synchronization/semaphore.zig");
 const EventGroup = @import("synchronization/event_group.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 const OsSyncControl = @import("synchronization/sync_control.zig");
+const OsTimer = @import("synchronization/timer.zig");
+const builtin = @import("builtin");
 
 pub const Task = OsTask.Task;
 
@@ -28,7 +30,7 @@ const task_ctrl = &OsTask.task_control;
 const SyncControl = OsSyncControl.SyncControl;
 const TimerControl = OsSyncControl.TimerControl;
 
-pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize;
+pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize + 1;
 const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
 
 var os_config: OsConfig = .{};
@@ -76,6 +78,67 @@ pub fn setOsStarted() void {
 /// Returns true when the OS is running
 pub fn isOsStarted() bool {
     return os_started;
+}
+
+pub var g_stack_offset: usize = 0x08;
+
+/// The operating system will begin multitasking.  This function should only be
+/// called once.  Subsequent calls have no effect.  The frist time this function
+/// is called it will not return as multitasking started.
+pub fn startOS(comptime config: OsConfig) void {
+    if (isOsStarted() == false) {
+        comptime {
+            if (config.idle_stack_size < DEFAULT_IDLE_TASK_SIZE) {
+                @compileError("Idle stack size cannont be less than the default size.");
+            }
+        }
+
+        setOsConfig(config);
+
+        var idle_stack: [config.idle_stack_size]u32 = [_]u32{0xDEADC0DE} ** config.idle_stack_size;
+
+        var idle_task = Task.create_task(.{
+            .name = "idle task",
+            .priority = 0, //Idle task priority is ignored
+            .stack = &idle_stack,
+            .subroutine = config.idle_task_subroutine,
+        });
+
+        task_ctrl.addIdleTask(&idle_task);
+
+        var timer_task: Task = undefined;
+        var timer_stack: [config.timer_config.timer_stack_size]u32 = undefined;
+
+        if (config.timer_config.timer_enable) {
+            comptime {
+                if (config.timer_config.timer_stack_size < DEFAULT_IDLE_TASK_SIZE) {
+                    @compileError("Timer stack size cannont be less than the default size.");
+                }
+            }
+            timer_stack = [_]u32{0xDEADC0DE} ** config.timer_config.timer_stack_size;
+            timer_task = Task.create_task(.{
+                .name = "timer task",
+                .priority = config.timer_config.timer_task_priority,
+                .stack = &timer_stack,
+                .subroutine = OsTimer.timerSubroutine,
+            });
+
+            timer_task.init();
+            OsTimer.timer_sem.init() catch unreachable;
+        }
+
+        //Find offset to stack ptr as zig does not guarantee struct field order
+        g_stack_offset = @abs(@intFromPtr(&idle_task._stack_ptr) -% @intFromPtr(&idle_task));
+
+        setOsStarted();
+        Arch.runScheduler(); //begin os
+
+        if (Arch.isDebugAttached()) {
+            @breakpoint();
+        }
+
+        if (!builtin.is_test) unreachable;
+    }
 }
 
 /// Schedule the next task to run
@@ -149,11 +212,11 @@ pub const Time = struct {
     }
 
     pub const SleepTime = struct {
-        ms: u32 = 0,
-        sec: u32 = 0,
-        min: u32 = 0,
-        hr: u32 = 0,
-        days: u32 = 0,
+        ms: usize = 0,
+        sec: usize = 0,
+        min: usize = 0,
+        hr: usize = 0,
+        days: usize = 0,
     };
 
     fn sleepTimeToMs(time: *SleepTime) !u32 {
@@ -169,7 +232,7 @@ pub const Time = struct {
         return total_ms;
     }
 
-    /// Put the active task to sleep.  The value of time must be less than 2^32 milliseconds (~49.7 days) and 2^32 system ticks.
+    /// Put the active task to sleep.  The value of `time` must be less than 2^32 milliseconds (~49.7 days) and less than 2^32 system ticks.
     pub fn sleep(time: SleepTime) Error!void {
         const timeout = sleepTimeToMs(&time) catch return Error.SleepDurationOutOfRange;
         try delay(timeout);

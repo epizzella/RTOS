@@ -71,8 +71,9 @@ pub const Task = struct {
     /// Add task to the OS
     pub fn init(self: *Self) void {
         if (!self._init) {
-            task_control.readyTask(self);
+            Arch.initStack(self);
             self._init = true;
+            task_control.readyTask(self);
         }
     }
 
@@ -111,22 +112,6 @@ pub const TaskControl = struct {
 
     pub var current_task: ?*volatile Task = null;
     pub var next_task: *volatile Task = undefined;
-
-    ///Initalize the stacks for every task added to the OS
-    pub fn initAllStacks(self: *TaskControl) void {
-        if (!OsCore.isOsStarted()) {
-            for (&self.table) |*row| {
-                var task = row.ready_tasks.head;
-                while (true) {
-                    if (task) |t| {
-                        Arch.initStack(t);
-                        task = t._to_tail;
-                    }
-                    if (task == null) break;
-                }
-            }
-        }
-    }
 
     inline fn clearReadyBit(self: *TaskControl, priority: u6) void {
         self.ready_mask &= ~(ONE << (priorityAdjust[priority]));
@@ -236,6 +221,7 @@ pub const TaskControl = struct {
     }
 
     pub fn addIdleTask(self: *TaskControl, idle_task: *Task) void {
+        Arch.initStack(idle_task);
         self.table[IDLE_PRIORITY_LEVEL].ready_tasks.insertAfter(idle_task, null);
     }
 
