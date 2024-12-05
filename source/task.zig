@@ -18,7 +18,7 @@ const std = @import("std");
 const OsCore = @import("os_core.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 const os_config = &OsCore.getOsConfig;
 const SyncContext = OsCore.SyncContext;
 const Error = OsCore.Error;
@@ -81,7 +81,7 @@ pub const Task = struct {
         if (!self._init) return OsCore.Error.Uninitialized;
         //TODO: return an error if the task is blocked.
         task_control.suspendTask(self);
-        arch.runScheduler();
+        Arch.runScheduler();
     }
 
     /// Resume the task
@@ -89,7 +89,7 @@ pub const Task = struct {
         if (!self._init) return OsCore.Error.Uninitialized;
         //TODO: return an error if the task is not suspended.
         task_control.readyTask(self);
-        arch.runScheduler();
+        Arch.runScheduler();
     }
 };
 
@@ -119,7 +119,7 @@ pub const TaskControl = struct {
                 var task = row.ready_tasks.head;
                 while (true) {
                     if (task) |t| {
-                        arch.initStack(t);
+                        Arch.initStack(t);
                         task = t._to_tail;
                     }
                     if (task == null) break;
@@ -412,11 +412,11 @@ pub fn taskTopRoutine() void {
         };
     }
 
-    arch.criticalStart();
+    Arch.criticalStart();
     if (task_control.popRunningTask()) |active_task| {
         task_control.addSuspended(active_task);
         active_task._state = State.exited;
     }
-    arch.criticalEnd();
-    arch.runScheduler();
+    Arch.criticalEnd();
+    Arch.runScheduler();
 }

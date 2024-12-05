@@ -17,54 +17,64 @@
 const OsTask = @import("../../task.zig");
 const Os = @import("../../../os.zig");
 
+pub const minStackSize = 16;
+pub const LOWEST_PRIO_MSK: u2 = 0x3;
+
 pub inline fn contextSwitch() void {
     asm volatile (
-        \\  CPSID   I                                      
-        \\  LDR     R0, [%[current_task]]                   
-        \\  CMP     R0, #0                                       /* If current_task is null skip context save */
+        \\  CPSID   I   
+        \\  MOV     R12, %[x]                                   /* Save the offset in R12 */
+        \\  MOV     R14, R4                                     /* Save R4 in R14 (LR) */
+        \\                               
+        \\  LDR     %[x], [%[current_task]]                     /* If current_task is null skip context save */
+        \\  CMP     %[x], #0
         \\  BEQ     ContextRestore
         \\
-        \\  MRS     R12, PSP                                     /* Move process stack pointer into R12 */
-        \\  SUBS    R12, R12, #0x24                              /* Ajust stack point for R4-R11 plus EXC_RETURN (LR) */
-        \\  STR     R12, [R0, %[offset]]                         /* Save the current stack pointer in current_task */ 
-        \\  STMIA   R12!, {R4-R7}                                /* Push registers R4-R7 on the stack */
+        \\  MRS     R1, PSP                                     /* Move process stack pointer into R12 */
+        \\  SUBS    R1, R1, #0x20                               /* Adjust stack point for R8-R11  */
         \\
-        \\  MOV     R4, R8                                       /* Push registers R8-R11 on the stack */
+        \\  MOV     R4, R12                                     /* Move the offset to R4 */
+        \\  STR     R1, [%[x], R4]                              /* Save the current stack pointer in current_task */
+        \\
+        \\  MOV     R4, R14                                     /* Restore R4 to is original value */ 
+        \\  STMIA   R1!, {R4-R7}                                /* Push registers R4-R7 on the stack */
+        \\
+        \\  MOV     R4, R8                                      /* Push registers R8-R11 on the stack */
         \\  MOV     R5, R9
         \\  MOV     R6, R10
         \\  MOV     R7, R11
-        \\  STMIA   R12!, {R4-R7}
+        \\  STMIA   R1!, {R4-R7}
         \\
-        \\  MOV     R4, LR                                       /* Push EXC_RETURN (LR) onto the stack */                              
-        \\  STMIA   R12!, {R4} 
+        \\ContextRestore:
+        \\  MOV     R4, R12                                     /* Move the offset to R4 */                                           
+        \\  LDR     R1, [%[next_task], R4]                      /* Set stack pointer to next_task stack pointer */
         \\
-        \\ContextRestore:                                           
-        \\  LDR     R12, [%[next_task], %[offset]]               /* Set stack pointer to next_task stack pointer */
-        \\  ADDS    R12, #0x10
-        \\  LDMIA   R12!, {R4-R7}                                /* Pop registers R8-R11 */  
+        \\  ADDS    R1, R1, #0x10                               /* Adjust stack pointer */
+        \\  LDMIA   R1!, {R4-R7}                                /* Pop registers R8-R11 */  
         \\  MOV     R8,  R4                                                                
         \\  MOV     R9,  R5
         \\  MOV     R10, R6
         \\  MOV     R11, R7  
         \\
-        \\  LDMIA   R12!, {R4}                                   /* Pop EXC_RETURN (LR) */
-        \\  MOV     LR, R4                     
-        \\  ORR     LR,  LR, #0x04                               /* Set EXC_RETURN process stack */
+        \\  MSR     PSP, R1                                     /* Load PSP with final stack pointer */
         \\
-        \\  MSR     PSP, R12                                     /* Load PSP with new stack pointer */
+        \\  SUBS    R1, R1, #0x20                               /* Adjust stack pointer */
+        \\  LDMIA   R1!, {R4-R7}                                /* Pop register R4-R7 */
         \\
-        \\  SUBS    R12, #0x24                                   /* Pop register R4-R7 */
-        \\  LDMIA   R12!, {R4-R7}
+        \\  STR     %[next_task], [%[current_task], #0x00]      /* Set current_task to next_task */
         \\
-        \\  STR     %[next_task], [%[current_task], #0x00]       /* Set current_task to next_task */
-        \\  CPSIE   I                                            /* enable interrupts */
+        \\  MOVS    %[x], 0x02                                  /* Load EXC_RETURN with 0xFFFFFFFD*/
+        \\  MVNS    %[x], %[x]
+        \\  MOV     LR, %[x]
+        \\
+        \\  CPSIE   I                         
+        \\  BX      LR
         :
         : [next_task] "l" (OsTask.TaskControl.next_task),
           [current_task] "l" (&OsTask.TaskControl.current_task),
-          [offset] "l" (Os.g_stack_offset),
-        : "R0", "R4", "R5", "R6", "R7", "R12"
+          [x] "l" (Os.g_stack_offset),
+        : "R1", "R4"
     );
-    OsTask.TaskControl.current_task.?._state = OsTask.State.running;
 }
 
 /////////////////////////////////////////////

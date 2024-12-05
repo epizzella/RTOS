@@ -21,7 +21,7 @@ const ArchInterface = @import("source/arch/arch_interface.zig");
 pub const OsTimer = @import("source/synchronization/timer.zig");
 const builtin = @import("builtin");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 
 pub const Task = OsTask.Task;
 pub const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
@@ -35,7 +35,7 @@ pub const OsError = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 
 pub fn init() void {
-    arch.coreInit();
+    Arch.coreInit();
 }
 
 const task_ctrl = &OsTask.task_control;
@@ -99,9 +99,9 @@ pub fn startOS(comptime config: OsConfig) void {
         std.mem.doNotOptimizeAway(g_stack_offset);
 
         OsCore.setOsStarted();
-        arch.runScheduler(); //begin os
+        Arch.runScheduler(); //begin os
 
-        if (arch.isDebugAttached()) {
+        if (Arch.isDebugAttached()) {
             @breakpoint();
         }
 

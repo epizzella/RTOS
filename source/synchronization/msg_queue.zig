@@ -21,7 +21,7 @@ const ArchInterface = @import("../arch/arch_interface.zig");
 
 const Task = OsTask.Task;
 const task_control = &OsTask.task_control;
-var arch = ArchInterface.arch;
+var Arch = ArchInterface.Arch;
 
 pub const Control = SyncControl.SyncControl;
 const SyncContex = SyncControl.SyncContext;
@@ -73,8 +73,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
 
         pub fn pushMsg(self: *Self, msg: opt.MsgType) Error!void {
             _ = try OsCore.validateCallMinor();
-            arch.criticalStart();
-            defer arch.criticalEnd();
+            Arch.criticalStart();
+            defer Arch.criticalEnd();
 
             if (self._isfull()) return Error.QueueFull;
 
@@ -91,8 +91,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             if (self._syncContex._pending.head) |head| {
                 task_control.readyTask(head);
                 if (head._priority < task_control.running_priority) {
-                    arch.criticalEnd();
-                    arch.runScheduler();
+                    Arch.criticalEnd();
+                    Arch.runScheduler();
                 }
             }
         }
@@ -119,12 +119,12 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
 
         pub fn awaitMsg(self: *Self, options: AwaitOptions) Error!opt.MsgType {
             _ = try OsCore.validateCallMajor();
-            arch.criticalStart();
-            defer arch.criticalEnd();
+            Arch.criticalStart();
+            defer Arch.criticalEnd();
 
             if (self._empty) {
                 try Control.blockTask(&self._syncContex, options.timeout_ms);
-                arch.criticalStart();
+                Arch.criticalStart();
             }
 
             return self.popMsg();
@@ -135,8 +135,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
         }
 
         pub fn flush(self: *Self) void {
-            arch.criticalStart();
-            defer arch.criticalEnd();
+            Arch.criticalStart();
+            defer Arch.criticalEnd();
 
             self._head = 0;
             self._tail = 0;
@@ -144,8 +144,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
         }
 
         pub fn isEmpty(self: *Self) bool {
-            arch.criticalStart();
-            defer arch.criticalEnd();
+            Arch.criticalStart();
+            defer Arch.criticalEnd();
 
             return self._empty;
         }
@@ -155,10 +155,10 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
         }
 
         pub fn isFull(self: *Self) bool {
-            arch.criticalStart();
-            defer arch.criticalEnd();
+            Arch.criticalStart();
+            defer Arch.criticalEnd();
 
-            return _isfull(self);
+            return self._isfull();
         }
     };
 }

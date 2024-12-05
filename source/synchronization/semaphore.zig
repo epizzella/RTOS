@@ -20,7 +20,7 @@ const TaskQueue = OsTask.TaskQueue;
 const SyncControl = @import("sync_control.zig");
 const ArchInterface = @import("../arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 
 const task_control = &OsTask.task_control;
 const os_config = &OsCore.getOsConfig;
@@ -76,8 +76,8 @@ pub const Semaphore = struct {
     pub fn wait(self: *Self, options: WaitOptions) Error!void {
         _ = try OsCore.validateCallMajor();
         if (!self._syncContext._init) return Error.Uninitialized;
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
 
         if (self._count == 0) {
             //locked
@@ -95,15 +95,15 @@ pub const Semaphore = struct {
     /// Increments the counter.  If the pending task is higher priority
     /// than the running task the scheduler is called.
     pub fn post(self: *Self, options: PostOptions) Error!void {
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
         const running_task = try OsCore.validateCallMinor();
 
         if (self._syncContext._pending.head) |head| {
             task_control.readyTask(head);
             if (head._priority < running_task._priority and options.runScheduler) {
-                arch.criticalEnd();
-                arch.runScheduler();
+                Arch.criticalEnd();
+                Arch.runScheduler();
             }
         } else {
             self._count += 1;

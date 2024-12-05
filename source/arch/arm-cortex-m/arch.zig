@@ -27,9 +27,6 @@ const V7 = @import("armv7-m.zig");
 const V8 = @import("armv8-m.zig");
 const V8P1 = @import("armv8.1-m.zig");
 
-//Bit Masks
-pub const LOWEST_PRIO_MSK: u8 = 0xFF;
-
 const core = getCore: {
     const cpu_model = builtin.cpu.model;
 
@@ -50,14 +47,15 @@ pub const Self = @This();
 /////////////////////////////////////////////////////////
 //    Architecture specific Function Implemntations   //
 ///////////////////////////////////////////////////////
-pub fn coreInit(_: *Self) void {
-    SHPR3.PRI_PENDSV = LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
-    SHPR3.PRI_SYSTICK = ~LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
+pub const minStackSize = core.minStackSize;
+
+pub fn coreInit() void {
+    SHPR3.PRI_PENDSV = core.LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
+    SHPR3.PRI_SYSTICK = ~core.LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
 }
 
-pub fn initStack(self: *Self, task: *Task) void {
-    _ = self;
-    task._stack_ptr = @intFromPtr(&task._stack.ptr[task._stack.len - 17]);
+pub fn initStack(task: *Task) void {
+    task._stack_ptr = @intFromPtr(&task._stack.ptr[task._stack.len - minStackSize]);
     task._stack.ptr[task._stack.len - 1] = 0x1 << 24; // xPSR
     task._stack.ptr[task._stack.len - 2] = @intFromPtr(&OsTask.taskTopRoutine); // PC
     task._stack.ptr[task._stack.len - 3] = 0x14141414; // LR (R14)
@@ -69,33 +67,34 @@ pub fn initStack(self: *Self, task: *Task) void {
     task._stack.ptr[task._stack.len - 9] = 0xFFFFFFFD; // EXEC_RETURN (LR)
 }
 
-pub fn interruptActive(_: *Self) bool {
+pub fn interruptActive() bool {
     return ICSR.VECTACTIVE > 0;
 }
 
 ///Enable Interrupts
-pub inline fn criticalEnd(_: *Self) void {
+pub inline fn criticalEnd() void {
     asm volatile ("CPSIE    I");
 }
 
 ///Disable Interrupts
-pub inline fn criticalStart(_: *Self) void {
+pub inline fn criticalStart() void {
     asm volatile ("CPSID    I");
 }
 
-pub inline fn runScheduler(_: *Self) void {
+pub inline fn runScheduler() void {
     asm volatile ("SVC    #0");
 }
 
-pub inline fn runContextSwitch(_: *Self) void {
+pub inline fn runContextSwitch() void {
+    OsTask.TaskControl.next_task._state = .running;
     ICSR.PENDSVSET = true;
 }
 
-pub inline fn startOs(_: *Self) void {
+pub inline fn startOs() void {
     // firstContextSwitch();
 }
 
-pub inline fn isDebugAttached(_: *Self) bool {
+pub inline fn isDebugAttached() bool {
     return DHCSR.C_DEBUGEN;
 }
 
@@ -104,17 +103,15 @@ pub inline fn isDebugAttached(_: *Self) bool {
 ///////////////////////////////////////////
 
 export fn SysTick_Handler() void {
-    var self = Self{};
-    self.criticalStart();
+    criticalStart();
     OsCore.OsTick();
-    self.criticalEnd();
+    criticalEnd();
 }
 
 export fn SVC_Handler() void {
-    var self = Self{};
-    self.criticalStart();
+    criticalStart();
     OsCore.schedule();
-    self.criticalEnd();
+    criticalEnd();
 }
 
 export fn PendSV_Handler() void {

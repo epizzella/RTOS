@@ -23,12 +23,12 @@ const OsSyncControl = @import("synchronization/sync_control.zig");
 
 pub const Task = OsTask.Task;
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 const task_ctrl = &OsTask.task_control;
 const SyncControl = OsSyncControl.SyncControl;
 const TimerControl = OsSyncControl.TimerControl;
 
-pub const DEFAULT_IDLE_TASK_SIZE = 18; //TODO: Change this based on the selected arch
+pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize;
 const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
 
 var os_config: OsConfig = .{};
@@ -54,7 +54,7 @@ pub const OsConfig = struct {
     /// Function run by the idle task. Replaces the default idle task.  This subroutine cannot be suspended or blocked;
     idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
     /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is provided idle_stack_size must be
-    /// larger than 17;
+    /// larger than DEFAULT_IDLE_TASK_SIZE;
     idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
     /// Function run at the beginning of the sysTick interrupt;
     os_tick_callback: ?*const fn () void = null,
@@ -82,7 +82,7 @@ pub fn isOsStarted() bool {
 pub fn schedule() void {
     task_ctrl.setNextRunningTask();
     if (task_ctrl.validSwitch()) {
-        arch.runContextSwitch();
+        Arch.runContextSwitch();
     }
 }
 
@@ -91,7 +91,7 @@ pub fn validateCallMajor() Error!*Task {
     if (!os_started) return Error.OsOffline;
     const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
     if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
-    if (arch.interruptActive()) return Error.IllegalInterruptAccess;
+    if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
     return running_task;
 }
 
@@ -140,11 +140,11 @@ pub const Time = struct {
         if (time_ms != 0) {
             var timeout: u32 = math.mul(u32, time_ms, os_config.system_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
             timeout /= 1000;
-            arch.criticalStart();
+            Arch.criticalStart();
             task_ctrl.yeildTask(running_task);
             running_task._timeout = timeout;
-            arch.criticalEnd();
-            arch.runScheduler();
+            Arch.criticalEnd();
+            Arch.runScheduler();
         }
     }
 

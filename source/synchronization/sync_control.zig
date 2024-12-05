@@ -26,7 +26,7 @@ const Task = OsTask.Task;
 const TaskQueue = OsTask.TaskQueue;
 const Timer = OsTimer.Timer;
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 
 pub const SyncContext = struct {
     _next: ?*SyncContext = null,
@@ -72,8 +72,8 @@ pub const SyncControl = struct {
             blocker._pending.insertSorted(task);
             task._timeout = (timeout_ms * OsCore.getOsConfig().system_clock_freq_hz) / 1000;
             task._state = OsTask.State.blocked;
-            arch.criticalEnd();
-            arch.runScheduler();
+            Arch.criticalEnd();
+            Arch.runScheduler();
 
             if (task._SyncContext.timed_out) {
                 task._SyncContext.timed_out = false;
@@ -94,13 +94,13 @@ pub const SyncControl = struct {
         const q = task._queue orelse return Error.TaskNotBlockedBySync;
         if (q != &blocker._pending) return Error.TaskNotBlockedBySync;
 
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
         task._SyncContext.aborted = true;
         task_control.readyTask(task);
         if (task._priority < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
+            Arch.criticalEnd();
+            Arch.runScheduler();
         }
     }
 };

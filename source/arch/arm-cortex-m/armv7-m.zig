@@ -20,9 +20,10 @@ const builtin = @import("builtin");
 const OsTask = @import("../../task.zig");
 const Os = @import("../../../os.zig");
 
-pub inline fn contextSwitch() void {
-    OsTask.TaskControl.next_task._state = OsTask.State.running;
+pub const minStackSize = 17;
+pub const LOWEST_PRIO_MSK: u8 = 0xFF;
 
+pub inline fn contextSwitch() void {
     if (builtin.abi == std.Target.Abi.eabi) {
         asm volatile (
             \\  CPSID   I                                      
