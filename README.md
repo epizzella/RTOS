@@ -31,9 +31,7 @@ A Real Time Operating System written in Zig
 
 ## Supported Architectures
 
-- [ ] ARMv6-M: Cortex M0 & M0+
-- [X] ARMv7-M: Cortex M3
-- [ ] ARMv7-M: M4, & M7
-  - [ ] Floating Point Coprocessor
-- [ ] ARMv8-M
-  - [ ] Floating Point Coprocessor
+- [X] ARMv6-M
+- [X] ARMv7-M
+- [ ] ARMv8-M:
+- [ ] ARMv8.1-M:
