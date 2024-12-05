@@ -20,7 +20,7 @@ const TaskQueue = OsTask.TaskQueue;
 const SyncControl = @import("sync_control.zig");
 const ArchInterface = @import("../arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 
 const task_control = &OsTask.task_control;
 const os_config = &OsCore.getOsConfig;
@@ -53,10 +53,8 @@ pub const Semaphore = struct {
     }
 
     /// Add the semaphore to the OS
-    pub fn init(self: *Self) void {
-        if (!self._syncContext._init) {
-            Control.add(&self._syncContext);
-        }
+    pub fn init(self: *Self) Error!void {
+        try Control.add(&self._syncContext);
     }
 
     /// Remove the semaphore from the OS
@@ -64,7 +62,7 @@ pub const Semaphore = struct {
         try Control.remove(&self._syncContext);
     }
 
-    pub const AquireOptions = struct {
+    pub const WaitOptions = struct {
         /// an optional timeout in milliseconds.  When set to a non-zero value the
         /// task will block for the amount of time specified. If the timeout expires
         /// before the count is non-zero acquire() will return OsError.TimedOut. When
@@ -75,11 +73,11 @@ pub const Semaphore = struct {
     /// Decrements the counter.  If the counter is at zero the running task will be
     /// blocked until the counter's value becomes non zero. Cannot be called from an
     /// interrupt.
-    pub fn acquire(self: *Self, options: AquireOptions) Error!void {
+    pub fn wait(self: *Self, options: WaitOptions) Error!void {
         _ = try OsCore.validateCallMajor();
         if (!self._syncContext._init) return Error.Uninitialized;
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
 
         if (self._count == 0) {
             //locked
@@ -90,18 +88,22 @@ pub const Semaphore = struct {
         }
     }
 
+    pub const PostOptions = struct {
+        runScheduler: bool = true,
+    };
+
     /// Increments the counter.  If the pending task is higher priority
     /// than the running task the scheduler is called.
-    pub fn release(self: *Self) Error!void {
-        arch.criticalStart();
-        defer arch.criticalEnd();
-        const running_task = try OsCore.validateCallMajor();
+    pub fn post(self: *Self, options: PostOptions) Error!void {
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
+        const running_task = try OsCore.validateCallMinor();
 
         if (self._syncContext._pending.head) |head| {
             task_control.readyTask(head);
-            if (head._priority < running_task._priority) {
-                arch.criticalEnd();
-                arch.runScheduler();
+            if (head._priority < running_task._priority and options.runScheduler) {
+                Arch.criticalEnd();
+                Arch.runScheduler();
             }
         } else {
             self._count += 1;

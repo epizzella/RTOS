@@ -20,7 +20,7 @@ const TaskQueue = OsTask.TaskQueue;
 const SyncControl = @import("sync_control.zig");
 const ArchInterface = @import("../arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 
 const task_control = &OsTask.task_control;
 const Task = OsTask.Task;
@@ -45,10 +45,9 @@ pub const Mutex = struct {
     }
 
     /// Add the mutex to the OS
-    pub fn init(self: *Self) void {
+    pub fn init(self: *Self) Error!void {
         if (!self._syncContext._init) {
-            Control.add(&self._syncContext);
-            self._syncContext._init = true;
+            try Control.add(&self._syncContext);
         }
     }
 
@@ -71,8 +70,8 @@ pub const Mutex = struct {
     pub fn acquire(self: *Self, options: AquireOptions) Error!void {
         const running_task = try OsCore.validateCallMajor();
         if (running_task == self._owner) return Error.MutexOwnerAquire;
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
 
         if (self._owner) |owner| {
             //locked
@@ -89,8 +88,8 @@ pub const Mutex = struct {
     /// running task is not the owner OsError.TaskNotOwner is returned. Cannot be
     /// called from an interrupt.
     pub fn release(self: *Self) Error!void {
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
         const active_task = try OsCore.validateCallMajor();
 
         if (active_task == self._owner) {
@@ -98,8 +97,8 @@ pub const Mutex = struct {
             if (self._owner) |head| {
                 task_control.readyTask(head);
                 if (head._priority < task_control.running_priority) {
-                    arch.criticalEnd();
-                    arch.runScheduler();
+                    Arch.criticalEnd();
+                    Arch.runScheduler();
                 }
             }
         } else {

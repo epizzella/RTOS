@@ -14,10 +14,11 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
+const std = @import("std");
 const OsCore = @import("os_core.zig");
 const ArchInterface = @import("arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 const os_config = &OsCore.getOsConfig;
 const SyncContext = OsCore.SyncContext;
 const Error = OsCore.Error;
@@ -57,9 +58,6 @@ pub const Task = struct {
 
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
-        //TODO: is there anyway to run init() at comptime?  I need to understand when pointers
-        //can an cannot be used at comptime.
-
         return Task{
             ._name = config.name,
             ._stack = config.stack,
@@ -73,7 +71,7 @@ pub const Task = struct {
     /// Add task to the OS
     pub fn init(self: *Self) void {
         if (!self._init) {
-            task_control.addReady(self);
+            task_control.readyTask(self);
             self._init = true;
         }
     }
@@ -83,7 +81,7 @@ pub const Task = struct {
         if (!self._init) return OsCore.Error.Uninitialized;
         //TODO: return an error if the task is blocked.
         task_control.suspendTask(self);
-        arch.runScheduler();
+        Arch.runScheduler();
     }
 
     /// Resume the task
@@ -91,7 +89,7 @@ pub const Task = struct {
         if (!self._init) return OsCore.Error.Uninitialized;
         //TODO: return an error if the task is not suspended.
         task_control.readyTask(self);
-        arch.runScheduler();
+        Arch.runScheduler();
     }
 };
 
@@ -111,8 +109,8 @@ pub const TaskControl = struct {
     ready_mask: u32 = 0, //          mask of ready tasks
     running_priority: u6 = 0x00, //  priority level of the current running task
 
-    export var current_task: ?*volatile Task = null;
-    export var next_task: *volatile Task = undefined;
+    pub var current_task: ?*volatile Task = null;
+    pub var next_task: *volatile Task = undefined;
 
     ///Initalize the stacks for every task added to the OS
     pub fn initAllStacks(self: *TaskControl) void {
@@ -121,7 +119,7 @@ pub const TaskControl = struct {
                 var task = row.ready_tasks.head;
                 while (true) {
                     if (task) |t| {
-                        arch.initStack(t);
+                        Arch.initStack(t);
                         task = t._to_tail;
                     }
                     if (task == null) break;
@@ -183,7 +181,7 @@ pub const TaskControl = struct {
     }
 
     ///Pop the active task from its active queue
-    pub fn popActive(self: *TaskControl) ?*Task {
+    pub fn popRunningTask(self: *TaskControl) ?*Task {
         const head = self.table[self.running_priority].ready_tasks.pop();
         if (self.table[self.running_priority].ready_tasks.head == null) {
             self.clearReadyBit(self.running_priority);
@@ -195,7 +193,18 @@ pub const TaskControl = struct {
     ///Move the head task to the tail position of the active queue
     pub fn cycleActive(self: *TaskControl) void {
         if (self.running_priority < MAX_PRIO_LEVEL) {
-            self.table[self.running_priority].ready_tasks.headToTail();
+            var task = self.table[self.running_priority].ready_tasks.head;
+            if (self.table[self.running_priority].ready_tasks.headToTail()) {
+                task.?._state = State.ready;
+            }
+        }
+    }
+
+    pub fn getRunningTask(self: *TaskControl) *Task {
+        if (self.table[self.running_priority].ready_tasks.head) |running| {
+            return running;
+        } else {
+            @panic("Running Task Null.  Os not Started.");
         }
     }
 
@@ -203,10 +212,9 @@ pub const TaskControl = struct {
     pub fn setNextRunningTask(self: *TaskControl) void {
         self.running_priority = @clz(self.ready_mask);
         next_task = self.table[self.running_priority].ready_tasks.head.?;
-        next_task._state = State.running;
     }
 
-    ///Returns true if `current_task` and `next_task` are different
+    ///Returns true if the running task and `next_task` are different
     pub fn validSwitch(self: *TaskControl) bool {
         _ = self;
         return current_task != next_task;
@@ -215,20 +223,14 @@ pub const TaskControl = struct {
     ///Updates the delayed time for each sleeping task
     pub fn updateDelayedTasks(self: *TaskControl) void {
         for (&self.table) |*taskState| {
-            if (taskState.yielded_tasks.head) |head| {
-                var task = head;
-                while (true) { //iterate over the priority level list
-                    task._timeout -= 1;
-                    if (task._timeout == 0) {
-                        self.readyTask(task);
-                    }
-
-                    if (task._to_tail) |next| {
-                        task = next;
-                    } else {
-                        break;
-                    }
+            var opt_task = taskState.yielded_tasks.head;
+            while (opt_task) |task| {
+                task._timeout -= 1;
+                if (task._timeout == 0) {
+                    self.readyTask(task);
                 }
+
+                opt_task = task._to_tail;
             }
         }
     }
@@ -380,8 +382,9 @@ pub const TaskQueue = struct {
         return rtn;
     }
 
-    ///Move the head task to the tail position
-    pub fn headToTail(self: *Self) void {
+    ///Move the head task to the tail position.
+    pub fn headToTail(self: *Self) bool {
+        var rtn = false;
         if (self.head != self.tail) {
             if (self.head != null and self.tail != null) {
                 const temp = self.head;
@@ -392,8 +395,11 @@ pub const TaskQueue = struct {
                 self.tail.?._to_tail = temp;
                 temp.?._to_head = self.tail;
                 self.tail = temp;
+                rtn = true;
             }
         }
+
+        return rtn;
     }
 };
 
@@ -406,11 +412,11 @@ pub fn taskTopRoutine() void {
         };
     }
 
-    arch.criticalStart();
-    if (task_control.popActive()) |active_task| {
+    Arch.criticalStart();
+    if (task_control.popRunningTask()) |active_task| {
         task_control.addSuspended(active_task);
         active_task._state = State.exited;
     }
-    arch.criticalEnd();
-    arch.runScheduler();
+    Arch.criticalEnd();
+    Arch.runScheduler();
 }

@@ -14,79 +14,27 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const TestArch = @import("test/test_arch.zig");
-const ARMv7M = if (builtin.is_test != true) @import("arm-cortex-m/common/arch.zig") else @import("test/test_arch.zig");
 const Task = @import("../task.zig").Task;
 const builtin = @import("builtin");
 const std = @import("std");
 const cpu = std.Target.arm.cpu;
 
-pub const arch: Arch = getArch: {
+const TestArch = @import("test/test_arch.zig");
+const ArmCortexM = @import("arm-cortex-m/arch.zig");
+//Import future architecture implementions here
+
+pub const Arch = getArch: {
     const cpu_model = builtin.cpu.model;
     if (builtin.is_test == true) {
-        break :getArch Arch{ .test_arch = TestArch{} };
-    } else if (cpu_model == &cpu.cortex_m0 or cpu_model == &cpu.cortex_m0plus) {
-        @compileError("Unsupported architecture selected.");
-    } else if (cpu_model == &cpu.cortex_m3 or cpu_model == &cpu.cortex_m4 or cpu_model == &cpu.cortex_m7) {
-        break :getArch Arch{ .armv7_m = ARMv7M{} };
-    } else if (cpu_model == &cpu.cortex_m23 or cpu_model == &cpu.cortex_m33 or cpu_model == &cpu.cortex_m55 and cpu_model == &cpu.cortex_m85) {
-        @compileError("Unsupported architecture selected.");
+        break :getArch TestArch;
+    } else if (cpu_model == &cpu.cortex_m0 or //
+        cpu_model == &cpu.cortex_m0plus or //
+        cpu_model == &cpu.cortex_m3 or //
+        cpu_model == &cpu.cortex_m4 or //
+        cpu_model == &cpu.cortex_m7)
+    {
+        break :getArch ArmCortexM;
     } else {
         @compileError("Unsupported architecture selected.");
-    }
-};
-
-const Arch = union(enum) {
-    armv7_m: ARMv7M,
-    test_arch: TestArch,
-
-    const Self = @This();
-
-    pub fn coreInit(self: *Self) void {
-        switch (self.*) {
-            inline else => |*case| return case.coreInit(),
-        }
-    }
-
-    pub fn initStack(self: *Self, task: *Task) void {
-        switch (self.*) {
-            inline else => |*case| return case.initStack(task),
-        }
-    }
-
-    pub fn interruptActive(self: *Self) bool {
-        switch (self.*) {
-            inline else => |*case| return case.interruptActive(),
-        }
-    }
-
-    pub inline fn criticalEnd(self: *Self) void {
-        switch (self.*) {
-            inline else => |*case| return case.criticalEnd(),
-        }
-    }
-
-    pub inline fn criticalStart(self: *Self) void {
-        switch (self.*) {
-            inline else => |*case| return case.criticalStart(),
-        }
-    }
-
-    pub inline fn runScheduler(self: *Self) void {
-        switch (self.*) {
-            inline else => |*case| return case.runScheduler(),
-        }
-    }
-
-    pub inline fn runContextSwitch(self: *Self) void {
-        switch (self.*) {
-            inline else => |*case| return case.runContextSwitch(),
-        }
-    }
-
-    pub inline fn isDebugAttached(self: *Self) bool {
-        switch (self.*) {
-            inline else => |*case| return case.isDebugAttached(),
-        }
     }
 };

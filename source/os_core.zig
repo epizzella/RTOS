@@ -23,11 +23,12 @@ const OsSyncControl = @import("synchronization/sync_control.zig");
 
 pub const Task = OsTask.Task;
 
-var arch = ArchInterface.arch;
+const Arch = ArchInterface.Arch;
 const task_ctrl = &OsTask.task_control;
 const SyncControl = OsSyncControl.SyncControl;
+const TimerControl = OsSyncControl.TimerControl;
 
-pub const DEFAULT_IDLE_TASK_SIZE = 17; //TODO: Change this based on the selected arch
+pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize;
 const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
 
 var os_config: OsConfig = .{};
@@ -47,17 +48,24 @@ fn idle_subroutine() !void {
 }
 
 pub const OsConfig = struct {
-    /// The frequency of the system clock in hz.  Note:  This does not set
-    /// the system clock.  This only informs the OS of the system clock's frequenncy.  Default = 1000hz.
+    /// The frequency of the system clock in hz. This does not set the system clock.  TIt simply informs
+    /// the OS of the system clock's frequenncy.  Default = 1000hz.
     system_clock_freq_hz: u32 = DEFAULT_SYS_CLK_FREQ,
-    /// Function run by the idle task. Replaces the default idle task.  This
-    /// subroutine cannot be suspended or blocked;
+    /// Function run by the idle task. Replaces the default idle task.  This subroutine cannot be suspended or blocked;
     idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
-    /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is
-    /// provided idle_stack_size must be larger than 17;
+    /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is provided idle_stack_size must be
+    /// larger than DEFAULT_IDLE_TASK_SIZE;
     idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
     /// Function run at the beginning of the sysTick interrupt;
-    sysTick_callback: ?*const fn () void = null,
+    os_tick_callback: ?*const fn () void = null,
+    /// Software Timer Configuration
+    timer_config: TimerConfig = .{},
+};
+
+pub const TimerConfig = struct {
+    timer_enable: bool = false,
+    timer_task_priority: u5 = 0,
+    timer_stack_size: u32 = 0,
 };
 
 var os_started: bool = false;
@@ -74,7 +82,7 @@ pub fn isOsStarted() bool {
 pub fn schedule() void {
     task_ctrl.setNextRunningTask();
     if (task_ctrl.validSwitch()) {
-        arch.runContextSwitch();
+        Arch.runContextSwitch();
     }
 }
 
@@ -83,7 +91,7 @@ pub fn validateCallMajor() Error!*Task {
     if (!os_started) return Error.OsOffline;
     const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
     if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
-    if (arch.interruptActive()) return Error.IllegalInterruptAccess;
+    if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
     return running_task;
 }
 
@@ -132,11 +140,11 @@ pub const Time = struct {
         if (time_ms != 0) {
             var timeout: u32 = math.mul(u32, time_ms, os_config.system_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
             timeout /= 1000;
-            arch.criticalStart();
+            Arch.criticalStart();
             task_ctrl.yeildTask(running_task);
             running_task._timeout = timeout;
-            arch.criticalEnd();
-            arch.runScheduler();
+            Arch.criticalEnd();
+            Arch.runScheduler();
         }
     }
 
@@ -169,14 +177,15 @@ pub const Time = struct {
 };
 
 ///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
-pub inline fn systemTick() void {
-    if (os_config.sysTick_callback) |callback| {
+pub inline fn OsTick() void {
+    if (os_config.os_tick_callback) |callback| {
         callback();
     }
 
     if (os_started) {
         ticks +%= 1;
         SyncControl.updateTimeOut();
+        TimerControl.updateTimeOut();
         task_ctrl.updateDelayedTasks();
         task_ctrl.cycleActive();
         schedule();
@@ -202,6 +211,8 @@ pub const Error = error{
     Aborted,
     /// Os Object not initalized
     Uninitialized,
+    /// Os Object already initalized
+    Reinitialized,
     /// The task is not blocked by the synchonization object
     TaskNotBlockedBySync,
     /// The synchonization object cannot be deleted because there is atleast 1 task pending on it.

@@ -47,43 +47,38 @@ pub fn setInterruptActive(active: bool) void {
 }
 
 //Interface
-pub fn coreInit(self: *Self) void {
-    _ = self;
-}
+pub const minStackSize = 10;
 
-pub fn initStack(self: *Self, task: *Task) void {
-    _ = self;
+pub fn coreInit() void {}
+
+pub fn initStack(task: *Task) void {
     _ = task;
 }
 
-pub fn interruptActive(self: *Self) bool {
-    _ = self;
+pub fn interruptActive() bool {
     return int_active;
 }
 
 //Enable Interrupts
-pub inline fn criticalEnd(self: *Self) void {
-    _ = self;
+pub inline fn criticalEnd() void {
     criticalSection = false;
 }
 
 //Disable Interrupts
-pub inline fn criticalStart(self: *Self) void {
-    _ = self;
+pub inline fn criticalStart() void {
     criticalSection = true;
 }
 
-pub inline fn runScheduler(self: *Self) void {
-    _ = self;
+pub inline fn runScheduler() void {
     scheduler = true;
 }
 
-pub inline fn runContextSwitch(self: *Self) void {
-    _ = self;
+pub inline fn runContextSwitch() void {
     contex_switch = true;
 }
 
-pub inline fn isDebugAttached(self: *Self) bool {
-    _ = self;
+pub inline fn startOs() void {}
+
+pub inline fn isDebugAttached() bool {
     return debug_atached;
 }

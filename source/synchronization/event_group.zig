@@ -20,7 +20,7 @@ const Task = OsTask.Task;
 const SyncControl = @import("sync_control.zig");
 const ArchInterface = @import("../arch/arch_interface.zig");
 
-var arch = ArchInterface.arch;
+var Arch = ArchInterface.Arch;
 const Error = OsCore.Error;
 const task_control = &OsTask.task_control;
 pub const Control = SyncControl.SyncControl;
@@ -51,10 +51,9 @@ pub const EventGroup = struct {
     }
 
     /// Add the event group to the OS
-    pub fn init(self: *Self) void {
+    pub fn init(self: *Self) Error!void {
         if (!self._syncContex._init) {
-            Control.add(&self._syncContex);
-            self._syncContex._init = true;
+            try Control.add(&self._syncContex);
         }
     }
 
@@ -68,8 +67,8 @@ pub const EventGroup = struct {
         const running_task = try OsCore.validateCallMinor();
         if (!self._syncContex._init) return Error.Uninitialized;
 
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
         self._event = options.event;
         var pending_task = self._syncContex._pending.head;
         var highest_pending_prio: usize = OsTask.IDLE_PRIORITY_LEVEL;
@@ -90,8 +89,8 @@ pub const EventGroup = struct {
         }
 
         if (highest_pending_prio < running_task._priority) {
-            arch.criticalEnd();
-            arch.runScheduler();
+            Arch.criticalEnd();
+            Arch.runScheduler();
         }
     }
 
@@ -119,8 +118,8 @@ pub const EventGroup = struct {
         running_task._SyncContext.pending_event = options.event_mask;
         running_task._SyncContext.trigger_type = options.PendOn;
 
-        arch.criticalStart();
-        defer arch.criticalEnd();
+        Arch.criticalStart();
+        defer Arch.criticalEnd();
 
         const event_triggered = checkEventTriggered(running_task._SyncContext, self._event);
         if (event_triggered) {
