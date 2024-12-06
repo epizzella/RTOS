@@ -30,7 +30,7 @@ pub inline fn contextSwitch() void {
         \\  CMP     %[x], #0
         \\  BEQ     ContextRestore
         \\
-        \\  MRS     R1, PSP                                     /* Move process stack pointer into R12 */
+        \\  MRS     R1, PSP                                     /* Move process stack pointer into R1 */
         \\  SUBS    R1, R1, #0x20                               /* Adjust stack point for R8-R11  */
         \\
         \\  MOV     R4, R12                                     /* Move the offset to R4 */

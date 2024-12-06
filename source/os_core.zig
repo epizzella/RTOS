@@ -50,7 +50,7 @@ fn idle_subroutine() !void {
 }
 
 pub const OsConfig = struct {
-    /// The frequency of the system clock in hz. This does not set the system clock.  TIt simply informs
+    /// The frequency of the system clock in hz. This does not set the system clock; it simply informs
     /// the OS of the system clock's frequenncy.  Default = 1000hz.
     system_clock_freq_hz: u32 = DEFAULT_SYS_CLK_FREQ,
     /// Function run by the idle task. Replaces the default idle task.  This subroutine cannot be suspended or blocked;
@@ -82,6 +82,8 @@ pub fn isOsStarted() bool {
 
 pub var g_stack_offset: usize = 0x08;
 
+var timer_task: Task = undefined;
+
 /// The operating system will begin multitasking.  This function should only be
 /// called once.  Subsequent calls have no effect.  The frist time this function
 /// is called it will not return as multitasking started.
@@ -96,7 +98,6 @@ pub fn startOS(comptime config: OsConfig) void {
         setOsConfig(config);
 
         var idle_stack: [config.idle_stack_size]u32 = [_]u32{0xDEADC0DE} ** config.idle_stack_size;
-
         var idle_task = Task.create_task(.{
             .name = "idle task",
             .priority = 0, //Idle task priority is ignored
@@ -106,7 +107,6 @@ pub fn startOS(comptime config: OsConfig) void {
 
         task_ctrl.addIdleTask(&idle_task);
 
-        var timer_task: Task = undefined;
         var timer_stack: [config.timer_config.timer_stack_size]u32 = undefined;
 
         if (config.timer_config.timer_enable) {
@@ -151,8 +151,12 @@ pub fn schedule() void {
 
 //TODO: Move the validateCall functions into SyncControl & add checks for init
 pub fn validateCallMajor() Error!*Task {
-    if (!os_started) return Error.OsOffline;
-    const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
+    const running_task = try validateCallMinor();
+
+    if (getOsConfig().timer_config.timer_enable and running_task == &timer_task) {
+        return Error.IllegalTimerTask;
+    }
+
     if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
     if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
     return running_task;
@@ -262,6 +266,8 @@ pub const Error = error{
     OsOffline,
     /// Illegal call from idle task
     IllegalIdleTask,
+    /// Illegal call from timer task
+    IllegalTimerTask,
     /// Illegal call from interrupt
     IllegalInterruptAccess,
     /// A task that does not own this mutex attempted release

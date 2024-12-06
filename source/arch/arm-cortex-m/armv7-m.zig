@@ -20,7 +20,7 @@ const builtin = @import("builtin");
 const OsTask = @import("../../task.zig");
 const OsCore = @import("../../os_core.zig");
 
-pub const minStackSize = 17;
+pub const minStackSize = if (builtin.abi == std.Target.Abi.eabi) 16 else 48;
 pub const LOWEST_PRIO_MSK: u8 = 0xFF;
 
 pub inline fn contextSwitch() void {

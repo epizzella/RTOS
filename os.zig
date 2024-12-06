@@ -31,7 +31,7 @@ pub const Timer = @import("source/synchronization/timer.zig").Timer;
 pub const createMsgQueueType = @import("source/synchronization/msg_queue.zig").createMsgQueueType;
 
 pub const Time = OsCore.Time;
-pub const OsError = OsCore.Error;
+pub const Error = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 
 pub fn init() void {
@@ -43,4 +43,12 @@ pub fn init() void {
 /// is called it will not return as multitasking has started.
 pub fn startOS(comptime config: OsConfig) void {
     OsCore.startOS(config);
+}
+
+pub inline fn criticalStart() void {
+    Arch.criticalStart();
+}
+
+pub inline fn criticalEnd() void {
+    Arch.criticalEnd();
 }
