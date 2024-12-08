@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const cpu_model = target.query.cpu_model.explicit;
+    const cpu_model = target.query.cpu_model.explicit.*;
     if (cpu_model == cpu.cortex_m0 or cpu_model == cpu.cortex_m0plus) {
         //include armv6m assembly
     } else if (cpu_model == cpu.cortex_m3 or cpu_model == cpu.cortex_m4 or cpu_model == cpu.cortex_m7) {
