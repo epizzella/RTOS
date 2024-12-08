@@ -80,7 +80,7 @@ pub fn isOsStarted() bool {
     return os_started;
 }
 
-pub var g_stack_offset: usize = 0x08;
+pub export var g_stack_offset: usize = 0x08;
 
 var timer_task: Task = undefined;
 

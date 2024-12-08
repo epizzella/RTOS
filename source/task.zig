@@ -110,8 +110,8 @@ pub const TaskControl = struct {
     ready_mask: u32 = 0, //          mask of ready tasks
     running_priority: u6 = 0x00, //  priority level of the current running task
 
-    pub var current_task: ?*volatile Task = null;
-    pub var next_task: *volatile Task = undefined;
+    pub export var current_task: ?*volatile Task = null;
+    pub export var next_task: *volatile Task = undefined;
 
     inline fn clearReadyBit(self: *TaskControl, priority: u6) void {
         self.ready_mask &= ~(ONE << (priorityAdjust[priority]));
