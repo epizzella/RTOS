@@ -114,9 +114,9 @@ export fn SVC_Handler() void {
     criticalEnd();
 }
 
-export fn PendSV_Handler() void {
-    core.contextSwitch();
-}
+// export fn PendSV_Handler() void {
+//     core.contextSwitch();
+// }
 
 /////////////////////////////////////////////
 //        System Control Registers        //
