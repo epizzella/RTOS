@@ -1,12 +1,5 @@
 .{
     .name = "RTOS",
     .version = "0.0.0",
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "source",
-        "os.zig",
-        "README.md",
-        "test.zig",
-    },
+    .paths = .{"."},
 }
