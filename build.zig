@@ -11,19 +11,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const cpu_model = target.query.cpu_model.explicit;
-    const cpu_model2 = target.result.cpu.model;
-
-    std.log.err("cpu: {s}", .{cpu_model.name});
-    std.log.err("cpu2: {s}", .{cpu_model2.name});
-
-    if (cpu_model2 == &cpu.cortex_m0 or cpu_model2 == &cpu.cortex_m0plus) {
-        @compileError("cpu2 v6.");
-    } else if (cpu_model2 == &cpu.cortex_m3 or cpu_model2 == &cpu.cortex_m4 or cpu_model2 == &cpu.cortex_m7) {
-        @compileError("cpu2 v7");
-    } else {
-        @compileError("cpu2 Unsupported architecture selected.");
-    }
+    const cpu_model = target.result.cpu.model;
 
     if (cpu_model == &cpu.cortex_m0 or cpu_model == &cpu.cortex_m0plus) {
         //include armv6m assembly
