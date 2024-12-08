@@ -16,7 +16,7 @@ A Real Time Operating System written in Zig
 - [X] Unlimited tasks per priority level
 - [X] Tasks return anyerror!void.  Users have the option to provide an error handler callback. 
 - [X] Mutexes
-  - [ ] Priority Inheritance
+  - [X] Priority Inheritance
   - [X] Unit Tests
 - [X] Semaphores
   - [X] Unit Tests

@@ -14,74 +14,8 @@
 // limitations under the License.
 /////////////////////////////////////////////////////////////////////////////////
 
-const std = @import("std");
-const builtin = @import("builtin");
-
-const OsTask = @import("../../task.zig");
-const OsCore = @import("../../os_core.zig");
-
-pub const minStackSize = if (builtin.abi == std.Target.Abi.eabi) 16 else 48;
+pub const minStackSize = 17;
 pub const LOWEST_PRIO_MSK: u8 = 0xFF;
-
-pub inline fn contextSwitch() void {
-    if (builtin.abi == std.Target.Abi.eabi) {
-        asm volatile (
-            \\  CPSID   I                                      
-            \\  LDR     R0, [%[current_task]]                   
-            \\  CMP     R0, #0                                       /* If current_task is null skip context save */
-            \\  BEQ     ContextRestore 
-            \\  MRS     R12, PSP                                     /* Move process stack pointer into R12 */
-            \\  STMDB   R12!, {R4-R11, LR}                           /* push registers R4-R11 on the stack */
-            \\  STR     R12, [R0, %[offset]]                         /* Save the current stack pointer in current_task */
-            \\ContextRestore:                                           
-            \\  LDR     R12, [%[next_task], %[offset]]               /* Set stack pointer to next_task stack pointer */
-            \\  LDMIA   R12!, {R4-R11, LR}                           /* Pop registers R4-R11 */                                  
-            \\  MSR     PSP, R12                                     /* Load PSP with new stack pointer */
-            \\  STR     %[next_task], [%[current_task], #0x00]       /* Set current_task to next_task */
-            \\  CPSIE   I
-            \\  BX      LR
-            :
-            : [next_task] "l" (OsTask.TaskControl.next_task),
-              [current_task] "l" (&OsTask.TaskControl.current_task),
-              [offset] "l" (OsCore.g_stack_offset),
-            : "R0", "R12"
-        );
-    } else if (builtin.abi == std.Target.Abi.eabihf) {
-        asm volatile (
-            \\  CPSID    I                                      
-            \\  LDR      R0, [%[current_task]]                   
-            \\  CMP      R0, #0                                       /* If current_task is null skip context save */
-            \\  BEQ      ContextRestore 
-            \\  MRS      R12, PSP                                     /* Move process stack pointer into R12 */
-            \\ 
-            \\  TST      LR, #0x10                                    /* If the task was using FPU push FPU registers */
-            \\  IT       EQ
-            \\  VSTMDBEQ R12!,{S16-S31}
-            \\ 
-            \\  STMDB    R12!, {R4-R11, LR}                           /* Push registers R4-R11 & LR on the stack */
-            \\  STR      R12, [R0, %[offset]]                         /* Save the current stack pointer in current_task */
-            \\ContextRestore:                                           
-            \\  LDR      R12, [%[next_task], %[offset]]               /* Set stack pointer to next_task stack pointer */
-            \\  LDMIA    R12!, {R4-R11, LR}                           /* Pop registers R4-R11 & LR */
-            \\
-            \\  TST      LR, #0x10                                    /* If the task was using FPU pop FPU registers */
-            \\  IT       EQ
-            \\  VLDMIAEQ R12!,{S16-S31} 
-            \\                                   
-            \\  MSR      PSP, R12                                     /* Load PSP with new stack pointer */
-            \\  STR      %[next_task], [%[current_task], #0x00]       /* Set current_task to next_task */
-            \\  CPSIE    I
-            \\  BX       LR
-            :
-            : [next_task] "l" (OsTask.TaskControl.next_task),
-              [current_task] "l" (&OsTask.TaskControl.current_task),
-              [offset] "l" (OsCore.g_stack_offset),
-            : "R0", "R12"
-        );
-    } else {
-        @compileError("Invalid abi; abi must equal eabi or eabihf.");
-    }
-}
 
 /////////////////////////////////////////////
 //   System Control Register Addresses    //

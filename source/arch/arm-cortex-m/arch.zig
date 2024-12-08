@@ -28,14 +28,19 @@ const V8 = @import("armv8-m.zig");
 const V8P1 = @import("armv8.1-m.zig");
 
 const core = getCore: {
-    const cpu_model = builtin.cpu.model;
+    const cpu_model = builtin.cpu.model.*;
 
-    if (cpu_model == &cpu.cortex_m0 or cpu_model == &cpu.cortex_m0plus) {
+    if (std.meta.eql(cpu_model, cpu.cortex_m0) or //
+        std.meta.eql(cpu_model, cpu.cortex_m0plus))
+    {
         break :getCore V6;
-    } else if (cpu_model == &cpu.cortex_m3 or cpu_model == &cpu.cortex_m4 or cpu_model == &cpu.cortex_m7) {
+    } else if (std.meta.eql(cpu.cpu_model, cpu.cortex_m3) or //
+        std.meta.eql(cpu_model, cpu.cortex_m4) or //
+        std.meta.eql(cpu_model, cpu.cortex_m7))
+    {
         break :getCore V7;
     } else {
-        @compileError("Unsupported architecture selected.");
+        @compileError("Unsupported architecture selected comptime.");
     }
 };
 
@@ -65,6 +70,16 @@ pub fn initStack(task: *Task) void {
     task._stack.ptr[task._stack.len - 7] = 0x01010101; // R1
     task._stack.ptr[task._stack.len - 8] = 0x00000000; // R0
     task._stack.ptr[task._stack.len - 9] = 0xFFFFFFFD; // EXEC_RETURN (LR)
+
+    //These registers are push/poped via context switch code
+    task._stack.ptr[task._stack.len - 10] = 0x11111111; // R11
+    task._stack.ptr[task._stack.len - 11] = 0x10101010; // R10
+    task._stack.ptr[task._stack.len - 12] = 0x09090909; // R9
+    task._stack.ptr[task._stack.len - 13] = 0x08080808; // R8
+    task._stack.ptr[task._stack.len - 14] = 0x07070707; // R7
+    task._stack.ptr[task._stack.len - 14] = 0x06060606; // R6
+    task._stack.ptr[task._stack.len - 14] = 0x05050505; // R5
+    task._stack.ptr[task._stack.len - 14] = 0x04040404; // R4
 }
 
 pub fn interruptActive() bool {
@@ -112,10 +127,6 @@ export fn SVC_Handler() void {
     criticalStart();
     OsCore.schedule();
     criticalEnd();
-}
-
-export fn PendSV_Handler() void {
-    core.contextSwitch();
 }
 
 /////////////////////////////////////////////
