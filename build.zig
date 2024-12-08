@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
 
     const cpu_model = target.query.cpu_model.explicit;
 
-    std.log.err("cpu: {s}", cpu_model.name);
+    std.log.err("cpu: {s}", .{cpu_model.name});
 
     if (cpu_model == &cpu.cortex_m0 or cpu_model == &cpu.cortex_m0plus) {
         //include armv6m assembly
