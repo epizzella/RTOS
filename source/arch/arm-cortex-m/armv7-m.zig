@@ -20,11 +20,12 @@ pub const LOWEST_PRIO_MSK: u8 = 0xFF;
 /////////////////////////////////////////////
 //   System Control Register Addresses    //
 ///////////////////////////////////////////
-pub const ACTLR_ADDRESS: u32 = 0xE000E008; // Auxiliary Control Register
-pub const STCSR_ADDRESS: u32 = 0xE000E010; // SysTick Control and Status Register
-pub const STRVR_ADDRESS: u32 = 0xE000E014; // SysTick Reload Value Register
-pub const STCVR_ADDRESS: u32 = 0xE000E018; // SysTick Current Value Register
-pub const STCR_ADDRESS: u32 = 0xE000E01C; //  SysTick Calibration Value Register (Implementation specific)
+pub const ACTLR_ADDRESS: u32 = 0xE000E008; //       Auxiliary Control Register
+pub const SYST_CSR_ADDRESS: u32 = 0xE000E010; //    SysTick Control and Status Register
+pub const SYST_RVR_ADDRESS: u32 = 0xE000E014; //    SysTick Reload Value Register
+pub const SYST_CVR_ADDRESS: u32 = 0xE000E018; //    SysTick Current Value Register
+pub const SYST_CALIB_ADDRESS: u32 = 0xE000E01C; //  SysTick Calibration Value Register (Implementation specific)
+
 pub const CPUID_ADDRESS: u32 = 0xE000ED00; // CPUID Base Register
 pub const ICSR_ADDRESS: u32 = 0xE000ED04; //  Interrupt Control and State Register (RW or RO)
 pub const VTOR_ADDRESS: u32 = 0xE000ED08; //  Vector Table Offset Register
@@ -67,6 +68,56 @@ pub const DEMCR_ADDRESS: u32 = 0xE000EDFC; // Exception and Monitor Control Regi
 //    System Control Register Structs     //
 ///////////////////////////////////////////
 
+///SysTick Control and Status Register
+pub const SYST_CSR_REG = packed struct {
+    /// RW - Indicates if the SysTick counter is enabled
+    ENABLE: bool,
+    /// RW - Indicates if counting to 0 causes the SysTick exception to pend.
+    /// False: Count to 0 does not affect the SysTick exception status
+    /// True: Count to 0 changes the SysTick exception status to pending.
+    TICKINT: bool,
+    /// RW - Indicates the SysTick clock source:
+    /// 0 = SysTick uses the IMPLEMENTATION DEFINED external reference clock.
+    /// 1 = SysTick uses the processor clock.
+    /// If no external clock is provided, this bit reads as 1 and ignores writes.
+    CLKSOURCE: u1,
+    /// Reserved
+    RESERVED_3_15: u13,
+    /// Indicates whether the counter has counted to 0 since the last read of this register
+    /// False = Timer has not counted to 0.
+    /// True = Timer has counted to 0.
+    COUNTFLAG: bool,
+    RESERVED_17_31: u15,
+
+    comptime {
+        if (@bitSizeOf(@This()) != @bitSizeOf(u32)) @compileError("Register struct must be must be 32 bits");
+    }
+};
+
+///SysTick Reload Value Register
+pub const SYST_RVR_REG = packed struct {
+    /// RW - The value to load into the SYST_CVR when the counter reaches 0.
+    RELOAD: u24,
+    ///Reserved
+    RESERVED_24_31: u8,
+
+    comptime {
+        if (@bitSizeOf(@This()) != @bitSizeOf(u32)) @compileError("Register struct must be must be 32 bits");
+    }
+};
+
+/// Vector Table Offset Register
+pub const VTOR_REG = packed struct {
+    /// Reserved
+    RESERVED_0_6: u7,
+    /// RW - Bits 31-7 of the vector table address
+    TBLOFF: u25,
+
+    comptime {
+        if (@bitSizeOf(@This()) != @bitSizeOf(u32)) @compileError("Register struct must be must be 32 bits");
+    }
+};
+
 ///Interrupt Control State Register
 pub const ICSR_REG = packed struct {
     /// RO - Current executing exception's number. A value of 0 = Thread mode
@@ -101,12 +152,12 @@ pub const ICSR_REG = packed struct {
 
 ///System Handler Priority Register 3
 pub const SHPR3_REG = packed struct {
-    /// RW - Systme Handler 12 Priority
+    /// RW - Systme Handler 12 Priority: Debug Monitor
     PRI_DEBUG_MON: u8,
     RESERVED: u8,
-    /// RW - Systme Handler 14 Priority
+    /// RW - Systme Handler 14 Priority: Pend_SV
     PRI_PENDSV: u8,
-    /// RW - Systme Handler 12 Priority
+    /// RW - Systme Handler 12 Priority: SysTick
     PRI_SYSTICK: u8,
 
     comptime {

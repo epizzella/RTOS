@@ -1,5 +1,5 @@
 .{
-    .name = "RTOS",
+    .name = "EchoOS",
     .version = "0.0.0",
     .paths = .{"."},
 }

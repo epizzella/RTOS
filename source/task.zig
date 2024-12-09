@@ -58,6 +58,10 @@ pub const Task = struct {
 
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
+        if (config.stack.len < Arch.minStackSize) {
+            std.debug.panic("Task, {s}, must have a stack larger than {d}", .{ config.name, Arch.minStackSize });
+        }
+
         return Task{
             ._name = config.name,
             ._stack = config.stack,

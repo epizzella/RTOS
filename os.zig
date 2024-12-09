@@ -24,24 +24,19 @@ const ArchInterface = @import("source/arch/arch_interface.zig");
 const Arch = ArchInterface.Arch;
 
 pub const Task = OsTask.Task;
-pub const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
-pub const Mutex = @import("source/synchronization/mutex.zig").Mutex;
 pub const EventGroup = @import("source/synchronization/event_group.zig").EventGroup;
+pub const Mutex = @import("source/synchronization/mutex.zig").Mutex;
+pub const Semaphore = @import("source/synchronization/semaphore.zig").Semaphore;
 pub const Timer = @import("source/synchronization/timer.zig").Timer;
 pub const createMsgQueueType = @import("source/synchronization/msg_queue.zig").createMsgQueueType;
-
 pub const Time = OsCore.Time;
 pub const Error = OsCore.Error;
 pub const OsConfig = OsCore.OsConfig;
 
-pub fn init() void {
-    Arch.coreInit();
-}
-
 /// The operating system will begin multitasking.  This function should only be
 /// called once.  Subsequent calls have no effect.  The frist time this function
 /// is called it will not return as multitasking has started.
-pub fn startOS(comptime config: OsConfig) void {
+pub inline fn startOS(comptime config: OsConfig) void {
     OsCore.startOS(config);
 }
 

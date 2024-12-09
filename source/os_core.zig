@@ -33,7 +33,7 @@ const TimerControl = OsSyncControl.TimerControl;
 pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize + 1;
 const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
 
-var os_config: OsConfig = .{};
+var os_config: OsConfig = undefined;
 
 pub fn getOsConfig() OsConfig {
     return os_config;
@@ -50,18 +50,29 @@ fn idle_subroutine() !void {
 }
 
 pub const OsConfig = struct {
-    /// The frequency of the system clock in hz. This does not set the system clock; it simply informs
-    /// the OS of the system clock's frequenncy.  Default = 1000hz.
-    system_clock_freq_hz: u32 = DEFAULT_SYS_CLK_FREQ,
-    /// Function run by the idle task. Replaces the default idle task.  This subroutine cannot be suspended or blocked;
-    idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
-    /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is provided idle_stack_size must be
-    /// larger than DEFAULT_IDLE_TASK_SIZE;
-    idle_stack_size: u32 = DEFAULT_IDLE_TASK_SIZE,
-    /// Function run at the beginning of the sysTick interrupt;
+    /// OS & CPU clock Configuration
+    clock_config: ClockConfig,
+    /// Idle Task Configuration
+    idle_task_config: IdleTaskConfig = .{},
+    /// Function to execute at the beginning of the sysTick interrupt;
     os_tick_callback: ?*const fn () void = null,
     /// Software Timer Configuration
     timer_config: TimerConfig = .{},
+};
+
+pub const IdleTaskConfig = struct {
+    /// Subroutine executed by the idle task. Replaces the default idle task.  This subroutine cannot be suspended or blocked;
+    idle_task_subroutine: *const fn () anyerror!void = &idle_subroutine,
+    /// Number of words in the idle task stack.   Note:  if idle_task_subroutine is provided idle_stack_size must be
+    /// larger than DEFAULT_IDLE_TASK_SIZE;
+    idle_stack_size: usize = DEFAULT_IDLE_TASK_SIZE,
+};
+
+pub const ClockConfig = struct {
+    /// The frequency of the OS system clock in hz.
+    os_sys_clock_freq_hz: u32,
+    ///The frequency of the CPU clock in hz
+    cpu_clock_freq_hz: u32,
 };
 
 pub const TimerConfig = struct {
@@ -87,22 +98,25 @@ var timer_task: Task = undefined;
 /// The operating system will begin multitasking.  This function should only be
 /// called once.  Subsequent calls have no effect.  The frist time this function
 /// is called it will not return as multitasking started.
-pub fn startOS(comptime config: OsConfig) void {
+pub inline fn startOS(comptime config: OsConfig) void {
+    const iss = config.idle_task_config.idle_stack_size;
     if (isOsStarted() == false) {
         comptime {
-            if (config.idle_stack_size < DEFAULT_IDLE_TASK_SIZE) {
+            if (iss < DEFAULT_IDLE_TASK_SIZE) {
                 @compileError("Idle stack size cannont be less than the default size.");
             }
         }
 
         setOsConfig(config);
 
-        var idle_stack: [config.idle_stack_size]u32 = [_]u32{0xDEADC0DE} ** config.idle_stack_size;
+        Arch.coreInit(&config.clock_config);
+
+        var idle_stack: [iss]u32 = [_]u32{0xDEADC0DE} ** iss;
         var idle_task = Task.create_task(.{
             .name = "idle task",
             .priority = 0, //Idle task priority is ignored
             .stack = &idle_stack,
-            .subroutine = config.idle_task_subroutine,
+            .subroutine = config.idle_task_config.idle_task_subroutine,
         });
 
         task_ctrl.addIdleTask(&idle_task);
@@ -197,7 +211,7 @@ pub const Time = struct {
 
     /// Get the current number of elapsed ticks as milliseconds (rounded down)
     pub fn getTicksMs() u64 {
-        return (ticks * 1000) / os_config.system_clock_freq_hz;
+        return (ticks * 1000) / os_config.clock_config.os_sys_clock_freq_hz;
     }
 
     /// Put the active task to sleep.  It will become ready to run again after `time_ms` milliseconds.
@@ -205,7 +219,7 @@ pub const Time = struct {
     pub fn delay(time_ms: u32) Error!void {
         var running_task = try validateCallMajor();
         if (time_ms != 0) {
-            var timeout: u32 = math.mul(u32, time_ms, os_config.system_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
+            var timeout: u32 = math.mul(u32, time_ms, os_config.clock_config.os_sys_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
             timeout /= 1000;
             Arch.criticalStart();
             task_ctrl.yeildTask(running_task);

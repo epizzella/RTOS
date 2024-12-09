@@ -34,13 +34,13 @@ const core = getCore: {
         std.meta.eql(cpu_model, cpu.cortex_m0plus))
     {
         break :getCore V6;
-    } else if (std.meta.eql(cpu.cpu_model, cpu.cortex_m3) or //
+    } else if (std.meta.eql(cpu_model, cpu.cortex_m3) or //
         std.meta.eql(cpu_model, cpu.cortex_m4) or //
         std.meta.eql(cpu_model, cpu.cortex_m7))
     {
         break :getCore V7;
     } else {
-        @compileError("Unsupported architecture selected comptime.");
+        @compileError("Unsupported architecture selected.");
     }
 };
 
@@ -54,9 +54,70 @@ pub const Self = @This();
 ///////////////////////////////////////////////////////
 pub const minStackSize = core.minStackSize;
 
-pub fn coreInit() void {
-    SHPR3.PRI_PENDSV = core.LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to avoid context switch during ISR
+const Error = error{
+    SysTickAddressInvalid,
+    SvcAddressInvalid,
+    PendSvAddressInvalid,
+};
+
+//NVIC table offsets
+const systick_offset = 0x3c;
+const svc_offset = 0x2c;
+const pendsv_offset = 0x38;
+
+pub fn coreInit(clock_config: *const OsCore.ClockConfig) void {
+    const systick_address: u32 = @intFromPtr(&SysTick_Handler);
+    const svc_address: u32 = @intFromPtr(&SVC_Handler);
+    const pendsv_address: u32 = @intFromPtr(&PendSV_Handler);
+
+    const vtor_reg: *u32 = @ptrFromInt(core.VTOR_ADDRESS);
+    const vector_table_address = vtor_reg.*;
+
+    //Addresses of the NVIC table that store exception handler pointers.
+    const nvic_systick: *u32 = @ptrFromInt(vector_table_address + systick_offset);
+    const nvic_svc: *u32 = @ptrFromInt(vector_table_address + svc_offset);
+    const nvic_pendsv: *u32 = @ptrFromInt(vector_table_address + pendsv_offset);
+
+    //Exception Handler addresses stored in the NVIC table.  ORed with 1 for thumb mode.
+    const nvic_systick_address = nvic_systick.* | 0b1;
+    const nvic_svc_address = nvic_svc.* | 0b1;
+    const nvic_pendsv_address = nvic_pendsv.* | 0b1;
+
+    //Panic if exceptions are not setup correctly
+    if (systick_address != nvic_systick_address) {
+        std.debug.panic(
+            "SysTick Handler address in NVIC table, 0x{X}, does not match SysTick_Handler() address 0x{X}.",
+            .{ nvic_systick_address, systick_address },
+        );
+    }
+
+    if (svc_address != nvic_svc_address) {
+        std.debug.panic(
+            "SVC Handler address in NVIC table, 0x{X}, does not match SVC_Handler() address 0x{X}.",
+            .{ nvic_svc_address, svc_address },
+        );
+    }
+
+    if (pendsv_address != nvic_pendsv_address) {
+        std.debug.panic(
+            "PendSV Handler address in NVIC table, 0x{X}, does not match PendSV_Handler() address 0x{X}.",
+            .{ nvic_pendsv_address, pendsv_address },
+        );
+    }
+
+    //TODO: Setup ISR stack
+
+    SHPR3.PRI_PENDSV = core.LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to tail chain ISRs
     SHPR3.PRI_SYSTICK = ~core.LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
+
+    //Set SysTick reload value
+    const ticks: u32 = (clock_config.cpu_clock_freq_hz / clock_config.os_sys_clock_freq_hz) - 1;
+    SYST_RVR.RELOAD = @intCast(ticks);
+
+    //Enable SysTick counter & interrupt
+    SYST_CSR.CLKSOURCE = 1; //TODO: Make this configurable some how
+    SYST_CSR.ENABLE = true;
+    SYST_CSR.TICKINT = true;
 }
 
 pub fn initStack(task: *Task) void {
@@ -129,9 +190,13 @@ export fn SVC_Handler() void {
     criticalEnd();
 }
 
+extern fn PendSV_Handler() void;
+
 /////////////////////////////////////////////
 //        System Control Registers        //
 ///////////////////////////////////////////
 const ICSR: *volatile core.ICSR_REG = @ptrFromInt(core.ICSR_ADDRESS);
 const SHPR3: *volatile core.SHPR3_REG = @ptrFromInt(core.SHPR3_ADDRESS);
 const DHCSR: *volatile core.DHCSR_REG = @ptrFromInt(core.DHCSR_ADDRESS);
+const SYST_CSR: *volatile core.SYST_CSR_REG = @ptrFromInt(core.SYST_CSR_ADDRESS);
+const SYST_RVR: *volatile core.SYST_RVR_REG = @ptrFromInt(core.SYST_RVR_ADDRESS);
