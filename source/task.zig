@@ -59,7 +59,7 @@ pub const Task = struct {
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
         if (config.stack.len < Arch.minStackSize) {
-            std.debug.panic("Task, {s}, must have a stack larger than {d} usize", .{ config.name, Arch.minStackSize });
+            @panic("Task stack size smaller than minimum required.");
         }
 
         return Task{
@@ -77,7 +77,9 @@ pub const Task = struct {
         if (!self._init) {
             Arch.initStack(self);
             self._init = true;
+            Arch.criticalStart();
             task_control.readyTask(self);
+            Arch.criticalEnd();
         }
     }
 
@@ -90,16 +92,21 @@ pub const Task = struct {
     /// Suspend the task
     pub fn suspendMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        //TODO: return an error if the task is blocked.
+        if (self._priority == IDLE_PRIORITY_LEVEL) return OsCore.Error.IllegalIdleTask;
+        Arch.criticalStart();
         task_control.suspendTask(self);
+        Arch.criticalEnd();
         Arch.runScheduler();
     }
 
     /// Resume the task
     pub fn resumeMe(self: *Self) Error!void {
         if (!self._init) return OsCore.Error.Uninitialized;
-        //TODO: return an error if the task is not suspended.
+        if (self._priority == IDLE_PRIORITY_LEVEL) return OsCore.Error.IllegalIdleTask;
+        if (!task_control.table[self._priority].suspended_tasks.contains(self)) return OsCore.Error.IllegalTaskResume;
+        Arch.criticalStart();
         task_control.readyTask(self);
+        Arch.criticalEnd();
         Arch.runScheduler();
     }
 };
@@ -153,6 +160,14 @@ pub const TaskControl = struct {
             self.clearReadyBit(task._priority);
         }
         self.addSuspended(task);
+    }
+
+    ///Remove task
+    pub fn removeTask(self: *TaskControl, task: *Task) void {
+        if (task._queue) |q| _ = q.remove(task);
+        if (self.table[task._priority].ready_tasks.head == null) {
+            self.clearReadyBit(task._priority);
+        }
     }
 
     ///Add task to the active task queue
@@ -380,6 +395,7 @@ pub const TaskQueue = struct {
 
     ///Move the head task to the tail position.
     pub fn headToTail(self: *Self) bool {
+        //TODO: refactor to not use the ? operator
         var rtn = false;
         if (self.head != self.tail) {
             if (self.head != null and self.tail != null) {
@@ -404,7 +420,7 @@ pub fn taskTopRoutine() void {
     const err = task._subroutine();
 
     Arch.criticalStart();
-    task_control.addSuspended(task);
+    task_control.removeTask(task);
     task._state = State.exited;
     if (task._subroutineExitHandler) |exitHandler| {
         exitHandler(task, err);

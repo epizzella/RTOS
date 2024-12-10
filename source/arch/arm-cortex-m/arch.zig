@@ -78,31 +78,22 @@ pub fn coreInit(clock_config: *const OsCore.ClockConfig) void {
     const nvic_svc: *u32 = @ptrFromInt(vector_table_address + svc_offset);
     const nvic_pendsv: *u32 = @ptrFromInt(vector_table_address + pendsv_offset);
 
-    //Exception Handler addresses stored in the NVIC table.  ORed with 1 for thumb mode.
-    const nvic_systick_address = nvic_systick.* | 0b1;
-    const nvic_svc_address = nvic_svc.* | 0b1;
-    const nvic_pendsv_address = nvic_pendsv.* | 0b1;
+    //Exception Handler addresses stored in the NVIC table.
+    const nvic_systick_address = nvic_systick.*;
+    const nvic_svc_address = nvic_svc.*;
+    const nvic_pendsv_address = nvic_pendsv.*;
 
     //Panic if exceptions are not setup correctly
     if (systick_address != nvic_systick_address) {
-        std.debug.panic(
-            "SysTick Handler address in NVIC table, 0x{X}, does not match SysTick_Handler() address 0x{X}.",
-            .{ nvic_systick_address, systick_address },
-        );
+        @panic("SysTick Handler address in NVIC table does not match SysTick_Handler() address.\n");
     }
 
     if (svc_address != nvic_svc_address) {
-        std.debug.panic(
-            "SVC Handler address in NVIC table, 0x{X}, does not match SVC_Handler() address 0x{X}.",
-            .{ nvic_svc_address, svc_address },
-        );
+        @panic("SVC Handler address in NVIC table does not match SVC_Handler() address.\n");
     }
 
     if (pendsv_address != nvic_pendsv_address) {
-        std.debug.panic(
-            "PendSV Handler address in NVIC table, 0x{X}, does not match PendSV_Handler() address 0x{X}.",
-            .{ nvic_pendsv_address, pendsv_address },
-        );
+        @panic("PendSV Handler address in NVIC table does not match PendSV_Handler() address.\n");
     }
 
     //TODO: Setup ISR stack

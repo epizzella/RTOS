@@ -147,6 +147,7 @@ pub inline fn startOS(comptime config: OsConfig) void {
         Arch.runScheduler(); //begin os
 
         if (Arch.isDebugAttached()) {
+            // Os failed to start.  Likely something CPU specific is configured incorrectly.
             @breakpoint();
         }
 
@@ -166,7 +167,10 @@ pub fn schedule() void {
 pub fn validateCallMajor() Error!*Task {
     const running_task = try validateCallMinor();
 
-    if (getOsConfig().timer_config.timer_enable and running_task == &timer_task) {
+    if (getOsConfig().timer_config.timer_enable and //
+        running_task == &timer_task and //
+        OsTimer.getCallbackExecution())
+    {
         return Error.IllegalTimerTask;
     }
 
@@ -198,6 +202,7 @@ pub const SyncContext = struct {
     };
 };
 
+/// System tick counter
 var ticks: u64 = 0;
 
 pub const Time = struct {
@@ -254,6 +259,22 @@ pub const Time = struct {
         const timeout = sleepTimeToMs(&time) catch return Error.SleepDurationOutOfRange;
         try delay(timeout);
     }
+
+    fn validateCall() Error!*Task {
+        if (!os_started) return Error.OsOffline;
+        const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
+
+        if (getOsConfig().timer_config.timer_enable and //
+            running_task == &timer_task and //
+            OsTimer.getCallbackExecution())
+        {
+            return Error.IllegalTimerTask;
+        }
+
+        if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
+        if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
+        return running_task;
+    }
 };
 
 ///System tick functionality.  Should be called from the System Clock interrupt. e.g. SysTick_Handler
@@ -301,4 +322,6 @@ pub const Error = error{
     TaskPendingOnSync,
     /// The amount of time specified for the task to sleep exceeds the max value of 2^32 ms
     SleepDurationOutOfRange,
+    /// Task cannot be resumed as it is not suspended
+    IllegalTaskResume,
 };

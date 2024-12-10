@@ -57,20 +57,28 @@ fn task1() !void {
 const stackSize = 25;
 var stack1: [stackSize]u32 = [_]u32{0xDEADC0DE} ** stackSize;   
 
-//task 1
-var tcb1 = Task.create_task(.{
-    .name = "task1",
+//Create a task
+var tcb = Task.create_task(.{
+    .name = "task",
     .priority = 1,
     .stack = &stack1,
     .subroutine = &task1,
 });
 
 export fn main() void() {
-  //Initialize  here
+  //Initialize drivers before starting
 
-  Os.init();        // runtime hardware specific initalization
-  tcb1.init();      // initalize the task & make the OS awares of it
-  Os.startOS(.{});  // begin multitasking
+  // initalize the task & make the OS awares of it
+  tcb.init();      
+
+  //Start multitasking
+  Os.startOS(        
+    .clock_config = .{
+        .cpu_clock_freq_hz = 64_000_000,
+        .os_sys_clock_freq_hz = 1000,
+    },
+  )
+  
   unreachable;
 }
 ```
@@ -79,9 +87,8 @@ export fn main() void() {
 ### OS Config
 
 ## Tasks
-
+### Task Config
 ### Time Managment
-
 ### Intertask Communication
 
 ## Synchronization

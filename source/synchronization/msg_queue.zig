@@ -25,15 +25,19 @@ var Arch = ArchInterface.Arch;
 
 pub const Control = SyncControl.SyncControl;
 const SyncContex = SyncControl.SyncContext;
-const QError = error{ QueueFull, QueueEmpty };
+const QError = error{ QueueFull, QueueEmpty, QueueUninitialized };
 const OsError = OsCore.Error;
 const Error = QError || OsError;
 
+/// Options for creating a type of message queue
 pub const CreateOptions = struct {
+    /// The type that the message queue will accept
     MsgType: type,
+    /// The maximum number of messages that this type of queue can contain
     buffer_size: usize,
 };
 
+/// Create a message queue for a specific type
 pub fn createMsgQueueType(comptime opt: CreateOptions) type {
     return struct {
         const Self = @This();
@@ -52,6 +56,7 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             inital_val: opt.MsgType,
         };
 
+        /// Create a message queue
         pub fn createQueue(optQ: InitOptions) Self {
             return Self{
                 ._name = optQ.name,
@@ -61,6 +66,7 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             };
         }
 
+        /// Add message queue to OS
         pub fn init(self: *Self) Error!void {
             if (!self._syncContex._init) {
                 try Control.add(&self._syncContex);
