@@ -128,6 +128,19 @@ pub const ICSR_REG = packed struct {
     }
 };
 
+///System Handler Priority Register 2
+pub const SHPR2_REG = packed struct {
+    RESERVED_0_7: u8,
+    RESERVED_8_15: u8,
+    RESERVED_16_23: u8,
+    /// RW - Systme Handler 11 Priority: Debug Monitor
+    PRI_SVC: u8,
+
+    comptime {
+        if (@bitSizeOf(@This()) != @bitSizeOf(u32)) @compileError("Register struct must be must be 32 bits");
+    }
+};
+
 ///System Handler Priority Register 3
 pub const SHPR3_REG = packed struct {
     RESERVED_0_21: u22,

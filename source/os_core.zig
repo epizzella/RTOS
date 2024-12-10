@@ -30,8 +30,7 @@ const task_ctrl = &OsTask.task_control;
 const SyncControl = OsSyncControl.SyncControl;
 const TimerControl = OsSyncControl.TimerControl;
 
-pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize + 1;
-const DEFAULT_SYS_CLK_FREQ = 1000; // 1 Khz
+pub const DEFAULT_IDLE_TASK_SIZE = Arch.minStackSize;
 
 var os_config: OsConfig = undefined;
 

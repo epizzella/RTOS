@@ -196,6 +196,7 @@ extern fn PendSV_Handler() void;
 //        System Control Registers        //
 ///////////////////////////////////////////
 const ICSR: *volatile core.ICSR_REG = @ptrFromInt(core.ICSR_ADDRESS);
+const SHPR2: *volatile core.SHPR2_REG = @ptrFromInt(core.SHPR2_ADDRESS);
 const SHPR3: *volatile core.SHPR3_REG = @ptrFromInt(core.SHPR3_ADDRESS);
 const DHCSR: *volatile core.DHCSR_REG = @ptrFromInt(core.DHCSR_ADDRESS);
 const SYST_CSR: *volatile core.SYST_CSR_REG = @ptrFromInt(core.SYST_CSR_ADDRESS);

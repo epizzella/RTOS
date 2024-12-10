@@ -24,14 +24,12 @@ const SyncContext = OsCore.SyncContext;
 const Error = OsCore.Error;
 
 pub const Task = struct {
-    const Self = @This();
-
     _stack: []usize,
     _stack_ptr: usize = 0, //updated when os is started
     _state: State = State.ready,
     _queue: ?*TaskQueue = null,
     _subroutine: *const fn () anyerror!void,
-    _subroutineErrHandler: ?*const fn (err: anyerror) void = null,
+    _subroutineExitHandler: ?*const fn (task: *Task, err: anyerror!void) void = null,
     _timeout: u32 = 0,
     _timed_out: bool = false,
     _priority: u5,
@@ -42,6 +40,8 @@ pub const Task = struct {
     _init: bool = false,
     _name: []const u8,
 
+    const Self = @This();
+
     pub const TaskConfig = struct {
         /// Task name
         name: []const u8,
@@ -51,7 +51,7 @@ pub const Task = struct {
         subroutine: *const fn () anyerror!void,
         /// If `subroutine` returns an erorr that error will be passed to `subroutineErrHandler`.
         /// The task is suspsended after `subroutineErrHandler` completes, or if `subroutine` returns void.
-        subroutineErrHandler: ?*const fn (err: anyerror) void = null,
+        subroutineExitHandler: ?*const fn (task: *Task, err: anyerror!void) void = null,
         ///Priority level of the task.  Lower number = higher priority.
         priority: u5,
     };
@@ -59,7 +59,7 @@ pub const Task = struct {
     /// Create a task
     pub fn create_task(config: TaskConfig) Task {
         if (config.stack.len < Arch.minStackSize) {
-            std.debug.panic("Task, {s}, must have a stack larger than {d}", .{ config.name, Arch.minStackSize });
+            std.debug.panic("Task, {s}, must have a stack larger than {d} usize", .{ config.name, Arch.minStackSize });
         }
 
         return Task{
@@ -68,7 +68,7 @@ pub const Task = struct {
             ._priority = config.priority,
             ._basePriority = config.priority,
             ._subroutine = config.subroutine,
-            ._subroutineErrHandler = config.subroutineErrHandler,
+            ._subroutineExitHandler = config.subroutineExitHandler,
         };
     }
 
@@ -79,6 +79,12 @@ pub const Task = struct {
             self._init = true;
             task_control.readyTask(self);
         }
+    }
+
+    /// Delete a task from the OS
+    pub fn delete_task(self: *Self) void {
+        _ = self;
+        //TODO: implement this
     }
 
     /// Suspend the task
@@ -98,7 +104,7 @@ pub const Task = struct {
     }
 };
 
-pub const State = enum { running, ready, suspended, yeilded, blocked, blocked_timedout, exited };
+pub const State = enum { running, ready, suspended, yeilded, blocked, exited };
 
 pub var task_control: TaskControl = .{};
 
@@ -166,7 +172,7 @@ pub const TaskControl = struct {
     ///Add task to the suspended task queue
     fn addSuspended(self: *TaskControl, task: *Task) void {
         self.table[task._priority].suspended_tasks.insertAfter(task, null);
-        if (task._state != State.exited) task._state = State.suspended;
+        task._state = State.suspended;
     }
 
     ///Pop the active task from its active queue
@@ -394,19 +400,16 @@ pub const TaskQueue = struct {
 };
 
 pub fn taskTopRoutine() void {
-    if (task_control.table[task_control.running_priority].ready_tasks.head) |running_task| {
-        running_task._subroutine() catch |err| {
-            if (running_task._subroutineErrHandler) |errHandler| {
-                errHandler(err);
-            }
-        };
-    }
+    const task = task_control.getRunningTask();
+    const err = task._subroutine();
 
     Arch.criticalStart();
-    if (task_control.popRunningTask()) |active_task| {
-        task_control.addSuspended(active_task);
-        active_task._state = State.exited;
+    task_control.addSuspended(task);
+    task._state = State.exited;
+    if (task._subroutineExitHandler) |exitHandler| {
+        exitHandler(task, err);
     }
     Arch.criticalEnd();
+
     Arch.runScheduler();
 }
