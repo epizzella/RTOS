@@ -78,7 +78,7 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
         }
 
         pub fn pushMsg(self: *Self, msg: opt.MsgType) Error!void {
-            _ = try OsCore.validateCallMinor();
+            _ = try SyncControl.validateCallMinor();
             Arch.criticalStart();
             defer Arch.criticalEnd();
 
@@ -124,7 +124,7 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
         };
 
         pub fn awaitMsg(self: *Self, options: AwaitOptions) Error!opt.MsgType {
-            _ = try OsCore.validateCallMajor();
+            _ = try SyncControl.validateCallMajor();
             Arch.criticalStart();
             defer Arch.criticalEnd();
 

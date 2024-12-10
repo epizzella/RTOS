@@ -70,7 +70,7 @@ pub const Mutex = struct {
     /// is lock when acquire() is called the running task will be blocked until
     /// the mutex is unlocked. Cannot be called from an interrupt.
     pub fn acquire(self: *Self, options: AquireOptions) Error!void {
-        const running_task = try OsCore.validateCallMajor();
+        const running_task = try SyncControl.validateCallMajor();
         if (running_task == self._owner) return Error.MutexOwnerAquire;
         Arch.criticalStart();
         defer Arch.criticalEnd();
@@ -97,7 +97,7 @@ pub const Mutex = struct {
     pub fn release(self: *Self) Error!void {
         Arch.criticalStart();
         defer Arch.criticalEnd();
-        const active_task = try OsCore.validateCallMajor();
+        const active_task = try SyncControl.validateCallMajor();
 
         if (active_task == self._owner) {
             self._owner = self._syncContext._pending.head;

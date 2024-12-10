@@ -92,11 +92,9 @@ pub fn isOsStarted() bool {
 
 pub export var g_stack_offset: usize = 0x08;
 
-var timer_task: Task = undefined;
+pub var timer_task: Task = undefined;
 
-/// The operating system will begin multitasking.  This function should only be
-/// called once.  Subsequent calls have no effect.  The frist time this function
-/// is called it will not return as multitasking started.
+/// Start Multitasking
 pub inline fn startOS(comptime config: OsConfig) void {
     const iss = config.idle_task_config.idle_stack_size;
     if (isOsStarted() == false) {
@@ -163,28 +161,6 @@ pub fn schedule() void {
     }
 }
 
-//TODO: Move the validateCall functions into SyncControl & add checks for init
-pub fn validateCallMajor() Error!*Task {
-    const running_task = try validateCallMinor();
-
-    if (getOsConfig().timer_config.timer_enable and //
-        running_task == &timer_task and //
-        OsTimer.getCallbackExecution())
-    {
-        return Error.IllegalTimerTask;
-    }
-
-    if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
-    if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
-    return running_task;
-}
-
-pub fn validateCallMinor() Error!*Task {
-    if (!os_started) return Error.OsOffline;
-    const running_task = task_ctrl.table[task_ctrl.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
-    return running_task;
-}
-
 pub const SyncContext = struct {
     //Event context
     pending_event: usize = 0,
@@ -221,7 +197,7 @@ pub const Time = struct {
     /// Put the active task to sleep.  It will become ready to run again after `time_ms` milliseconds.
     /// * `time_ms` when converted to system ticks cannot exceed 2^32 system ticks.
     pub fn delay(time_ms: u32) Error!void {
-        var running_task = try validateCallMajor();
+        var running_task = try validateCall();
         if (time_ms != 0) {
             var timeout: u32 = math.mul(u32, time_ms, os_config.clock_config.os_sys_clock_freq_hz) catch return Error.SleepDurationOutOfRange;
             timeout /= 1000;

@@ -64,7 +64,7 @@ pub const EventGroup = struct {
 
     /// Set the event flag of an event group
     pub fn writeEvent(self: *Self, options: writeOptions) Error!void {
-        const running_task = try OsCore.validateCallMinor();
+        const running_task = try SyncControl.validateCallMinor();
         if (!self._syncContex._init) return Error.Uninitialized;
 
         Arch.criticalStart();
@@ -112,7 +112,7 @@ pub const EventGroup = struct {
     /// Block the running task until the pending event is set.  If the pending event
     /// is set when awaitEvent is called the running task will not be blocked.
     pub fn awaitEvent(self: *Self, options: AwaitEventOptions) Error!usize {
-        const running_task = try OsCore.validateCallMajor();
+        const running_task = try SyncControl.validateCallMajor();
         if (!self._syncContex._init) return Error.Uninitialized;
 
         running_task._SyncContext.pending_event = options.event_mask;

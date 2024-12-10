@@ -89,7 +89,7 @@ pub const SyncControl = struct {
     }
 
     pub fn abort(blocker: *SyncContext, task: *Task) Error!void {
-        const running_task = try OsCore.validateCallMinor();
+        const running_task = try validateCallMinor();
         if (!blocker._init) return Error.Uninitialized;
         const q = task._queue orelse return Error.TaskNotBlockedBySync;
         if (q != &blocker._pending) return Error.TaskNotBlockedBySync;
@@ -199,4 +199,25 @@ fn createControlList(comptime T: type) type {
             detach._init = false;
         }
     };
+}
+
+pub fn validateCallMajor() Error!*Task {
+    const running_task = try validateCallMinor();
+
+    if (OsCore.getOsConfig().timer_config.timer_enable and //
+        running_task == &OsCore.timer_task and //
+        OsTimer.getCallbackExecution())
+    {
+        return Error.IllegalTimerTask;
+    }
+
+    if (running_task._priority == OsTask.IDLE_PRIORITY_LEVEL) return Error.IllegalIdleTask;
+    if (Arch.interruptActive()) return Error.IllegalInterruptAccess;
+    return running_task;
+}
+
+pub fn validateCallMinor() Error!*Task {
+    if (!OsCore.isOsStarted()) return Error.OsOffline;
+    const running_task = task_control.table[task_control.running_priority].ready_tasks.head orelse return Error.RunningTaskNull;
+    return running_task;
 }
