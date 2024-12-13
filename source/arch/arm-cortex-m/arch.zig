@@ -96,8 +96,6 @@ pub fn coreInit(clock_config: *const OsCore.ClockConfig) void {
         @panic("PendSV Handler address in NVIC table does not match PendSV_Handler() address.\n");
     }
 
-    //TODO: Setup ISR stack
-
     SHPR3.PRI_PENDSV = core.LOWEST_PRIO_MSK; //Set the pendsv to the lowest priority to tail chain ISRs
     SHPR3.PRI_SYSTICK = ~core.LOWEST_PRIO_MSK; //Set sysTick to the highest priority.
 

@@ -171,17 +171,20 @@ fn createControlList(comptime T: type) type {
 
         pub fn add(self: *Self, new: *T) Error!void {
             if (new._init) return Error.Reinitialized;
+            Arch.criticalStart();
             new._next = self.list;
             if (self.list) |l| {
                 l._prev = new;
             }
             self.list = new;
             new._init = true;
+            Arch.criticalEnd();
         }
 
         pub fn remove(self: *Self, detach: *T) Error!void {
             if (!detach._init) return Error.Uninitialized;
 
+            Arch.criticalStart();
             if (self.list == detach) {
                 self.list = detach._next;
             }
@@ -197,6 +200,7 @@ fn createControlList(comptime T: type) type {
             detach._next = null;
             detach._prev = null;
             detach._init = false;
+            Arch.criticalEnd();
         }
     };
 }

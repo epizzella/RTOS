@@ -9,7 +9,7 @@ Echo OS has the following features:
 - Premptive priority based scheduler
   - 32 priority levels for user tasks plus 1 resevered priority level (lowest prioirty) for the idle task
   - Unlimited tasks per priority level
-- Syncronization
+- Task Syncronization
   - Event Groups
   - Mutexes
   - Semaphores
@@ -42,8 +42,7 @@ Echo OS uses the ```target``` argument at comptime to pull in the architecture s
 
 The entire API is accessabile through a single file:  os.zig.  You can use os.zig via @import: ```const Os = @import("EchoOS");```
 
-The following is a basic example of creating a task and starting multitasking.  One task is created, the
-OS is initalized, and multitasking is started.
+The following is a basic example of creating a task and starting multitasking.  One task is created and multitasking is started.
 ```
 const Os = @import("EchoOS");   //Import Echo OS 
 const Task = Os.Task
@@ -53,7 +52,7 @@ fn task1() !void {
   while(true) {}
 }
 
-//task 1 stack
+//task stack
 const stackSize = 25;
 var stack1: [stackSize]u32 = [_]u32{0xDEADC0DE} ** stackSize;   
 

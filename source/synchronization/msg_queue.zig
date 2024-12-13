@@ -73,8 +73,8 @@ pub fn createMsgQueueType(comptime opt: CreateOptions) type {
             }
         }
 
-        pub fn deinit(self: *Self) void {
-            _ = self;
+        pub fn deinit(self: *Self) Error!void {
+            try Control.remove(&self._syncContext);
         }
 
         pub fn pushMsg(self: *Self, msg: opt.MsgType) Error!void {

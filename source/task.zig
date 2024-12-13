@@ -22,11 +22,12 @@ const Arch = ArchInterface.Arch;
 const os_config = &OsCore.getOsConfig;
 const SyncContext = OsCore.SyncContext;
 const Error = OsCore.Error;
+const SyncControl = @import("synchronization/sync_control.zig");
 
 pub const Task = struct {
     _stack: []usize,
     _stack_ptr: usize = 0, //updated when os is started
-    _state: State = State.ready,
+    _state: State = State.uninitialized,
     _queue: ?*TaskQueue = null,
     _subroutine: *const fn () anyerror!void,
     _subroutineExitHandler: ?*const fn (task: *Task, err: anyerror!void) void = null,
@@ -76,17 +77,28 @@ pub const Task = struct {
     pub fn init(self: *Self) void {
         if (!self._init) {
             Arch.initStack(self);
-            self._init = true;
             Arch.criticalStart();
+            self._init = true;
             task_control.readyTask(self);
             Arch.criticalEnd();
         }
     }
 
-    /// Delete a task from the OS
-    pub fn delete_task(self: *Self) void {
-        _ = self;
-        //TODO: implement this
+    /// Remove task from the OS
+    ///
+    /// This function will not return if `self` is the running task
+    pub fn deinit(self: *Self) Error!void {
+        const running_task = try SyncControl.validateCallMajor();
+        Arch.criticalStart();
+        //TODO:  Check if task owns a mutex & release it.
+        self._init = false;
+        self._state = State.uninitialized;
+        task_control.removeTask(self);
+        if (running_task == self) {
+            Arch.criticalEnd();
+            Arch.runScheduler();
+        }
+        Arch.criticalEnd();
     }
 
     /// Suspend the task
@@ -111,7 +123,7 @@ pub const Task = struct {
     }
 };
 
-pub const State = enum { running, ready, suspended, yeilded, blocked, exited };
+pub const State = enum { running, ready, suspended, yeilded, blocked, uninitialized };
 
 pub var task_control: TaskControl = .{};
 
@@ -257,7 +269,6 @@ const TaskStateQ = struct {
     ready_tasks: TaskQueue = .{},
     yielded_tasks: TaskQueue = .{},
     suspended_tasks: TaskQueue = .{},
-    exited_tasks: TaskQueue = .{},
 };
 
 pub const TaskQueue = struct {
@@ -395,7 +406,6 @@ pub const TaskQueue = struct {
 
     ///Move the head task to the tail position.
     pub fn headToTail(self: *Self) bool {
-        //TODO: refactor to not use the ? operator
         var rtn = false;
         if (self.head != self.tail) {
             if (self.head != null and self.tail != null) {
@@ -421,7 +431,8 @@ pub fn taskTopRoutine() void {
 
     Arch.criticalStart();
     task_control.removeTask(task);
-    task._state = State.exited;
+    task._init = false;
+    task._state = State.uninitialized;
     if (task._subroutineExitHandler) |exitHandler| {
         exitHandler(task, err);
     }

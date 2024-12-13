@@ -57,6 +57,10 @@ pub const EventGroup = struct {
         }
     }
 
+    pub fn deinit(self: *Self) Error!void {
+        try Control.remove(&self._syncContext);
+    }
+
     const writeOptions = struct {
         /// The event flag
         event: usize,
