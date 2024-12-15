@@ -77,7 +77,7 @@ pub const ClockConfig = struct {
 pub const TimerConfig = struct {
     timer_enable: bool = false,
     timer_task_priority: u5 = 0,
-    timer_stack_size: u32 = 0,
+    timer_stack_size: usize = 0,
 };
 
 var os_started: bool = false;
